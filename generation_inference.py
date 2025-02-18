@@ -1,32 +1,13 @@
-# Copyright (c) 2023-2024 DeepSeek.
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy of
-# this software and associated documentation files (the "Software"), to deal in
-# the Software without restriction, including without limitation the rights to
-# use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
-# the Software, and to permit persons to whom the Software is furnished to do so,
-# subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
-# FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
-# COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
-# IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-# CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-import torch
-from transformers import AutoModelForCausalLM
-
-from janus.models import MultiModalityCausalLM, VLChatProcessor
-import numpy as np
 import os
 import PIL.Image
+import torch
+import numpy as np
+from transformers import AutoModelForCausalLM
+from janus.models import MultiModalityCausalLM, VLChatProcessor
+
 
 # specify the path to the model
-model_path = "deepseek-ai/Janus-1.3B"
+model_path = "deepseek-ai/Janus-Pro-1B"
 vl_chat_processor: VLChatProcessor = VLChatProcessor.from_pretrained(model_path)
 tokenizer = vl_chat_processor.tokenizer
 
@@ -37,10 +18,10 @@ vl_gpt = vl_gpt.to(torch.bfloat16).cuda().eval()
 
 conversation = [
     {
-        "role": "User",
-        "content": "A close-up high-contrast photo of Sydney Opera House sitting next to Eiffel tower, under a blue night sky of roiling energy, exploding yellow stars, and radiating swirls of blue.",
+        "role": "<|User|>",
+        "content": "A stunning princess from kabul in red, white traditional clothing, blue eyes, brown hair",
     },
-    {"role": "Assistant", "content": ""},
+    {"role": "<|Assistant|>", "content": ""},
 ]
 
 sft_format = vl_chat_processor.apply_sft_template_for_multi_turn_prompts(

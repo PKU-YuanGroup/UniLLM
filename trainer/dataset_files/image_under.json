@@ -1,0 +1,106 @@
+[
+    { 
+        "image": ["images/bus.jpg"],
+        "conversations": [
+            {
+                "from": "human",
+                "value": "<image>\nWhat are the colors of the bus in the image?"
+            },
+            {
+                "from": "gpt",
+                "value": "The bus in the image is white and red."
+            }
+        ]
+    },
+    { 
+        "image": ["images/bus.jpg"],
+        "conversations": [
+            {
+                "from": "human",
+                "value": "<image>\nWhat are the colors of the bus in the image?"
+            },
+            {
+                "from": "gpt",
+                "value": "The bus in the image is white and red."
+            }
+        ]
+    },
+    { 
+        "image": ["images/bus.jpg"],
+        "conversations": [
+            {
+                "from": "human",
+                "value": "<image>\nWhat are the colors of the bus in the image?"
+            },
+            {
+                "from": "gpt",
+                "value": "The bus in the image is white and red."
+            }
+        ]
+    },
+    { 
+        "image": ["images/bus.jpg"],
+        "conversations": [
+            {
+                "from": "human",
+                "value": "<image>\nWhat are the colors of the bus in the image?"
+            },
+            {
+                "from": "gpt",
+                "value": "The bus in the image is white and red."
+            }
+        ]
+    },
+    { 
+        "image": ["images/bus.jpg"],
+        "conversations": [
+            {
+                "from": "human",
+                "value": "<image>\nWhat are the colors of the bus in the image?"
+            },
+            {
+                "from": "gpt",
+                "value": "The bus in the image is white and red."
+            }
+        ]
+    },
+    { 
+        "image": ["images/bus.jpg"],
+        "conversations": [
+            {
+                "from": "human",
+                "value": "<image>\nWhat are the colors of the bus in the image?"
+            },
+            {
+                "from": "gpt",
+                "value": "The bus in the image is white and red."
+            }
+        ]
+    },
+    { 
+        "image": ["images/bus.jpg"],
+        "conversations": [
+            {
+                "from": "human",
+                "value": "<image>\nWhat are the colors of the bus in the image?"
+            },
+            {
+                "from": "gpt",
+                "value": "The bus in the image is white and red."
+            }
+        ]
+    },
+    { 
+        "image": ["images/bus.jpg"],
+        "conversations": [
+            {
+                "from": "human",
+                "value": "<image>\nWhat are the colors of the bus in the image?"
+            },
+            {
+                "from": "gpt",
+                "value": "The bus in the image is white and red."
+            }
+        ]
+    }
+]

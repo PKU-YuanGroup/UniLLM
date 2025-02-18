@@ -23,14 +23,21 @@ from einops import rearrange
 from transformers import (
     AutoConfig,
     AutoModelForCausalLM,
-    LlamaConfig,
-    LlamaForCausalLM,
+    # LlamaConfig,
+    # LlamaForCausalLM,
     PreTrainedModel,
 )
+from .llama.modeling_llama import LlamaForCausalLM, LlamaConfig
 from transformers.configuration_utils import PretrainedConfig
-
+from transformers.modeling_outputs import CausalLMOutputWithPast
+from transformers.cache_utils import Cache
+from transformers.models.llama.modeling_llama import KwargsForCausalLM
+from typing import Callable, List, Optional, Tuple, Union
+from transformers.processing_utils import Unpack
 from janus.models.clip_encoder import CLIPVisionTower
 from janus.models.projector import MlpProjector
+import torch.nn as nn
+from torchvision import transforms
 
 
 class vision_head(torch.nn.Module):
@@ -216,7 +223,14 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
         )
 
         language_config = config.language_config
+        language_config._attn_implementation = "flash_attention_2"
         self.language_model = LlamaForCausalLM(language_config)
+        self.image_vocab_size = gen_vision_config.params.image_token_size
+        
+        self.resize_transform = [transforms.Compose([transforms.Resize((384 // 16, 384 // 16))]), transforms.Compose([transforms.Resize((384 // 4, 384 // 4))])]
+
+    def gradient_checkpointing_enable(self, gradient_checkpointing_kwargs):
+        return self.language_model.gradient_checkpointing_enable(gradient_checkpointing_kwargs=gradient_checkpointing_kwargs)
 
     def prepare_inputs_embeds(
         self,
@@ -227,7 +241,6 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
         **kwargs,
     ):
         """
-
         Args:
             input_ids (torch.LongTensor): [b, T]
             pixel_values (torch.FloatTensor):   [b, n_images, 3, h, w]
@@ -239,7 +252,6 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
         Returns:
             input_embeds (torch.Tensor): [b, T, D]
         """
-
         bs, n = pixel_values.shape[0:2]
         images = rearrange(pixel_values, "b n c h w -> (b n) c h w")
         # [b x n, T2, D]
@@ -255,12 +267,132 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
         inputs_embeds = self.language_model.get_input_embeddings()(input_ids)
 
         # replace with the image embeddings
-        inputs_embeds[images_seq_mask] = images_embeds[images_emb_mask]
+        inputs_embeds[images_seq_mask[:, :inputs_embeds.size(1)]] = images_embeds[images_emb_mask[:, :inputs_embeds.size(1)]]
 
         return inputs_embeds
-
+    
     def prepare_gen_img_embeds(self, image_ids: torch.LongTensor):
         return self.gen_aligner(self.gen_embed(image_ids))
+    
+    def forward(
+        self,
+        input_ids: torch.LongTensor = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.LongTensor] = None,
+        past_key_values: Optional[Union[Cache, List[torch.FloatTensor]]] = None,
+        inputs_embeds: Optional[torch.FloatTensor] = None,
+        labels: Optional[torch.LongTensor] = None,
+        use_cache: Optional[bool] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        return_dict: Optional[bool] = None,
+        cache_position: Optional[torch.LongTensor] = None,
+        pixel_values: Optional[torch.FloatTensor] = None,
+        images_seq_mask: Optional[torch.FloatTensor] = None,
+        images_emb_mask: Optional[torch.FloatTensor] = None,
+        modals: Optional[List[str]] = None,
+        **kwargs: Unpack[KwargsForCausalLM],
+    ) -> Union[Tuple, CausalLMOutputWithPast]:
+        if "image" in modals and inputs_embeds is None:
+            inputs_embeds = self.prepare_inputs_embeds(
+                input_ids=input_ids,
+                pixel_values=pixel_values,
+                images_seq_mask=images_seq_mask,
+                images_emb_mask=images_emb_mask,
+            )
+            input_ids = None
+
+            return self.language_model.forward(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                position_ids=position_ids,
+                past_key_values=past_key_values,
+                inputs_embeds=inputs_embeds,
+                labels=labels,
+                use_cache=use_cache,
+                output_attentions=output_attentions,
+                output_hidden_states=output_hidden_states,
+                return_dict=return_dict,
+                cache_position=cache_position,
+                **kwargs,
+                )
+
+        elif "text" in modals:
+            return self.language_model.forward(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                position_ids=position_ids,
+                past_key_values=past_key_values,
+                inputs_embeds=inputs_embeds,
+                labels=labels,
+                use_cache=use_cache,
+                output_attentions=output_attentions,
+                output_hidden_states=output_hidden_states,
+                return_dict=return_dict,
+                cache_position=cache_position,
+                **kwargs,
+                )
+
+        elif "image_gen" in modals:
+            b, n = pixel_values.shape[0:2]
+            images = rearrange(pixel_values, "b n c h w -> (b n) c h w")  # 8, 3, 384, 384
+
+            if 1:
+                for i in self.resize_transform:
+                    images = i(images)
+                    z_q, (vq_loss, commit_loss, entropy_loss), (perplexity, min_encodings, min_encoding_indices) = self.gen_vision_model.encode(images)
+                    images_ids = min_encoding_indices.view(b * n, -1)
+                    image_token_nums = images_ids.size(1)
+                    img_embeds = self.prepare_gen_img_embeds(images_ids[:,:-1])
+
+            z_q, (vq_loss, commit_loss, entropy_loss), (perplexity, min_encodings, min_encoding_indices) = self.gen_vision_model.encode(images)
+            images_ids = min_encoding_indices.view(b * n, -1)
+            image_token_nums = images_ids.size(1)
+            img_embeds = self.prepare_gen_img_embeds(images_ids[:,:-1])
+            inputs_embeds = self.language_model.get_input_embeddings()(input_ids)
+            inputs_embeds = torch.cat([inputs_embeds, img_embeds], dim=1)
+            
+            hidden_states = self.language_model.forward(
+                input_ids=None,
+                attention_mask=attention_mask,
+                position_ids=position_ids,
+                past_key_values=past_key_values,
+                inputs_embeds=inputs_embeds,
+                labels=None,
+                use_cache=use_cache,
+                output_attentions=output_attentions,
+                output_hidden_states=output_hidden_states,
+                return_dict=return_dict,
+                cache_position=cache_position,
+                return_image_embeds=True,
+                **kwargs,
+                )
+
+            logits = self.gen_head(hidden_states[:, -image_token_nums:, :])
+            loss = nn.functional.cross_entropy(logits.view(-1, self.image_vocab_size), images_ids.view(-1))
+
+            return CausalLMOutputWithPast(
+                loss=loss,
+                logits=logits,
+                past_key_values=None,
+                hidden_states=hidden_states,
+                attentions=None,
+            )
+
+        return self.language_model.forward(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+            past_key_values=past_key_values,
+            inputs_embeds=inputs_embeds,
+            labels=labels,
+            use_cache=use_cache,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states,
+            return_dict=return_dict,
+            cache_position=cache_position,
+            **kwargs,
+        )
 
 
 AutoConfig.register("vision", VisionConfig)

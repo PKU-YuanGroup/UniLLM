@@ -419,3 +419,12 @@ tags
 .vscode
 .github
 generated_samples/
+
+
+
+Janus-Pro-1B
+janus.egg-info
+generated_samples
+cache_dir
+work_dirs*
+uesless
