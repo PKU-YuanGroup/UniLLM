@@ -23,7 +23,7 @@ echo "NPROC_PER_NODE: $NPROC_PER_NODE"
 
 # Training Arguments
 GLOBAL_BATCH_SIZE=128
-LOCAL_BATCH_SIZE=16
+LOCAL_BATCH_SIZE=4
 GRADIENT_ACCUMULATION_STEPS=$[$GLOBAL_BATCH_SIZE/($WORLD_SIZE*$NPROC_PER_NODE*$LOCAL_BATCH_SIZE)]
 echo $GRADIENT_ACCUMULATION_STEPS
 
@@ -33,6 +33,7 @@ RUN_NAME=stage_1
 DATA_DIR=/storage/dataset/filter_aes/final_coyo
 OUTP_DIR=work_dirs_0
 
+rm -r OUTP_DIR
 # conda activate janus_pro
 
 torchrun --nnodes $WORLD_SIZE \

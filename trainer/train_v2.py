@@ -98,7 +98,7 @@ def make_flattening_supervised_data_module(vlprocessor: transformers.ProcessorMi
         samples_per_epoch=1000000,
         dataset="image_under||image_gen||text_chat",
         sample_rate=[3, 3, 3],
-        batchsize_list=[2,2,2]
+        batchsize_list=[1,1,1]
 
     )
 

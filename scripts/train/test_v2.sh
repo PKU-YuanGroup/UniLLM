@@ -31,7 +31,7 @@ echo $GRADIENT_ACCUMULATION_STEPS
 export WANDB_PROJECT=videollama3_qwen2.5_2b
 RUN_NAME=stage_1
 DATA_DIR=/storage/dataset/filter_aes/final_coyo
-OUTP_DIR=work_dirs
+OUTP_DIR=work_dirs_0218
 
 conda activate janus_pro
 
@@ -63,7 +63,7 @@ torchrun --nnodes $WORLD_SIZE \
     --weight_decay 0. \
     --warmup_ratio 0.03 \
     --lr_scheduler_type "cosine" \
-    --logging_steps 1 \
+    --logging_steps 10 \
     --gradient_checkpointing True \
     --dataloader_num_workers 16 \
     --report_to tensorboard \

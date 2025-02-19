@@ -420,7 +420,7 @@ tags
 .github
 generated_samples/
 
-
+eval_data/
 
 Janus-Pro-1B
 janus.egg-info

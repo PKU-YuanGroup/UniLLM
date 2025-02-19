@@ -227,7 +227,9 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
         self.language_model = LlamaForCausalLM(language_config)
         self.image_vocab_size = gen_vision_config.params.image_token_size
         
-        self.resize_transform = [transforms.Compose([transforms.Resize((384 // 16, 384 // 16))]), transforms.Compose([transforms.Resize((384 // 4, 384 // 4))])]
+        # self.resize_transform = [transforms.Compose([transforms.Resize((384 // 16, 384 // 16))]), transforms.Compose([transforms.Resize((384 // 4, 384 // 4))])]
+        # self.var_embedding = nn.Embedding(len(self.resize_transform)+1, language_config.hidden_size)
+        # nn.init.zeros_(self.var_embedding.weight)
 
     def gradient_checkpointing_enable(self, gradient_checkpointing_kwargs):
         return self.language_model.gradient_checkpointing_enable(gradient_checkpointing_kwargs=gradient_checkpointing_kwargs)
@@ -336,22 +338,30 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
         elif "image_gen" in modals:
             b, n = pixel_values.shape[0:2]
             images = rearrange(pixel_values, "b n c h w -> (b n) c h w")  # 8, 3, 384, 384
-
-            if 1:
-                for i in self.resize_transform:
-                    images = i(images)
-                    z_q, (vq_loss, commit_loss, entropy_loss), (perplexity, min_encodings, min_encoding_indices) = self.gen_vision_model.encode(images)
-                    images_ids = min_encoding_indices.view(b * n, -1)
-                    image_token_nums = images_ids.size(1)
-                    img_embeds = self.prepare_gen_img_embeds(images_ids[:,:-1])
-
             z_q, (vq_loss, commit_loss, entropy_loss), (perplexity, min_encodings, min_encoding_indices) = self.gen_vision_model.encode(images)
             images_ids = min_encoding_indices.view(b * n, -1)
             image_token_nums = images_ids.size(1)
             img_embeds = self.prepare_gen_img_embeds(images_ids[:,:-1])
             inputs_embeds = self.language_model.get_input_embeddings()(input_ids)
+
+            if 0:
+                print(1)
+                _img_embeds, _images_ids = [], []
+                for _id, i in enumerate(self.resize_transform):
+                    images = i(images)
+                    z_q, (vq_loss, commit_loss, entropy_loss), (perplexity, min_encodings, min_encoding_indices) = self.gen_vision_model.encode(images)
+                    __images_ids = min_encoding_indices.view(b * n, -1)
+                    image_token_nums += __images_ids.size(1)
+                    _img_embeds.append(self.prepare_gen_img_embeds(__images_ids) + self.var_embedding(torch.full_like(__images_ids, _id)))
+                    _images_ids.append(__images_ids)
+                    
+                _img_embeds.append(img_embeds + self.var_embedding(torch.full_like(images_ids[:,:-1], len(self.resize_transform))))
+                _images_ids.append(images_ids)
+                img_embeds = torch.cat(_img_embeds, dim=1)
+                images_ids = torch.cat(_images_ids, dim=1)
+
             inputs_embeds = torch.cat([inputs_embeds, img_embeds], dim=1)
-            
+
             hidden_states = self.language_model.forward(
                 input_ids=None,
                 attention_mask=attention_mask,
