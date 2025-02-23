@@ -1,7 +1,7 @@
 #!/bin/bash
 cd /storage/jp/Janus
-CKPT_PATH="/storage/jp/Janus/Janus-Pro-1B"
-NAME="test"
+CKPT_PATH="/storage/jp/Janus/work_dirs_0219_1/videollama3_qwen2.5_2b/stage_1/checkpoint-1250"
+NAME="videollama3_qwen2.5_2b_stage1_new"
 
 gpu_list="${CUDA_VISIBLE_DEVICES:-0}"
 IFS=',' read -ra GPULIST <<< "$gpu_list"

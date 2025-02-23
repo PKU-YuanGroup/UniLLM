@@ -428,3 +428,5 @@ generated_samples
 cache_dir
 work_dirs*
 uesless
+generated_samples_0
+tmp.py

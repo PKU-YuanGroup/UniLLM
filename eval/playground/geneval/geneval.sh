@@ -10,9 +10,18 @@ CHUNKS=${#GPULIST[@]}
 ROOT_PATH="eval/playground/geneval"
 DATA_PATH="eval/eval_data/geneval"
 IMAGE_PATH="$DATA_PATH/<IMAGE_FOLDER>/$NAME"
+mkdir $IMAGE_PATH
 PROMPT_PATH="$DATA_PATH/prompts"
 
+for IDX in $(seq 0 $((CHUNKS-1))); do
+    deepspeed --include localhost:${GPULIST[$IDX]} --master_port $((${GPULIST[$IDX]} + 29501)) $ROOT_PATH/generation.py --model_path $CKPT_PATH \
+        "$PROMPT_PATH/evaluation_metadata.jsonl" \
+        --outdir $IMAGE_PATH \
+        --num-chunks $CHUNKS \
+        --chunk-idx $IDX &
+done
 
+wait
 
 source /storage/miniconda3/etc/profile.d/conda.sh
 conda activate gen_eval

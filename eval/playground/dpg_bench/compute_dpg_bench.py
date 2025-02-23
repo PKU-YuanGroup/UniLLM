@@ -181,7 +181,7 @@ def main():
 
     device = str(accelerator.device)
     if args.vqa_model == 'mplug':
-        vqa_model = MPLUG(device=device)
+        vqa_model = MPLUG(device=device,ckpt="/storage/jp/Janus/eval/eval_data/dpg_bench/mplug_visual-question-answering_coco_large_en")
     else:
         raise NotImplementedError
     vqa_model = accelerator.prepare(vqa_model)

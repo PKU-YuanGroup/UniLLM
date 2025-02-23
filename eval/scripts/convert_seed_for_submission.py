@@ -16,7 +16,6 @@ def eval_single(result_file, eval_only_type=None):
     for line in open(result_file):
         row = json.loads(line)
         results[row['question_id']] = row
-
     type_counts = {}
     correct_counts = {}
     for question_data in data['questions']:
@@ -31,9 +30,8 @@ def eval_single(result_file, eval_only_type=None):
             correct_counts[data_type] = correct_counts.get(data_type, 0)
             continue
         row = results[question_id]
-        if row['text'] == question_data['answer']:
+        if row['text'].strip() == question_data['answer']:
             correct_counts[data_type] = correct_counts.get(data_type, 0) + 1
-
     total_count = 0
     total_correct = 0
     for data_type in sorted(type_counts.keys()):

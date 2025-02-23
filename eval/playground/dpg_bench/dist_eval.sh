@@ -1,6 +1,6 @@
 #!/bin/bash
-CKPT_PATH="/storage/jp/Janus/Janus-Pro-1B"
-NAME="test"
+CKPT_PATH="/storage/jp/Janus/work_dirs_0219_1/videollama3_qwen2.5_2b/stage_1/checkpoint-1250"
+NAME="videollama3_qwen2.5_2b_stage1_new"
 
 gpu_list="${CUDA_VISIBLE_DEVICES:-0}"
 IFS=',' read -ra GPULIST <<< "$gpu_list"
@@ -14,15 +14,8 @@ RESOLUTION=${PIC_NUM:-384}
 PIC_NUM=${PIC_NUM:-4}
 PROCESSES=${PROCESSES:-8}
 PORT=${PORT:-29500}
- 
-for IDX in $(seq 0 $((CHUNKS-1))); do
-    deepspeed --include localhost:${GPULIST[$IDX]} --master_port $((${GPULIST[$IDX]} + 29501)) $ROOT_PATH/generation.py --model_path $CKPT_PATH --prompt_dirs $PROMPT_PATH \
-        --outdir $IMAGE_PATH --n_samples $PIC_NUM --size $RESOLUTION\
-        --num-chunks $CHUNKS \
-        --chunk-idx $IDX &
-done
 
-wait
+
 
 source /storage/miniconda3/etc/profile.d/conda.sh
 conda activate dpgbench 

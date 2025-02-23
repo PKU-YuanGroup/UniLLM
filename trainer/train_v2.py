@@ -88,18 +88,26 @@ def make_flattening_supervised_data_module(vlprocessor: transformers.ProcessorMi
 
     # )
 
+    data_args.image_under_data_files = data_args.image_under_data_files.split(',')
+    data_args.image_gen_data_files = data_args.image_gen_data_files.split(',')
+    data_args.text_chat_data_files = data_args.text_chat_data_files.split(',')
+    data_args.sample_rate = data_args.sample_rate.split(','); data_args.sample_rate = [ int(i) for i in data_args.sample_rate]
+    data_args.batchsize_list = data_args.batchsize_list.split(','); data_args.batchsize_list = [ int(i) for i in data_args.batchsize_list]
+    # data_args.dataset = data_args.dataset.split(',')
+
+    print(f'{data_args=}!!!')
+
     train_dataset = UniDataset(
         vlprocessor=vlprocessor,
-        image_under_data_files=['/storage/yqs/dataset/BAAI/DenseFusion-1M/DenseFusion-4V-100k/mini_uni_DenseFusion-4V-100k.json'], 
-        image_under_rootdir='/storage/yqs/dataset/BAAI/DenseFusion-1M/images',
-        image_gen_data_files=['/storage/dataset/filter_aes/cap_merge_final_640/recap2/mini_janus_part0_cap6595998.json'],
-        image_gen_rootdir='/storage/dataset/recap_datacomp_1b_data_20241023_supply/output_undownloaded',
-        text_chat_data_files=['/storage/yqs/dataset/BAAI/Infinity-Instruct/7M_domains/subjective/mini_output.json'],
-        samples_per_epoch=1000000,
-        dataset="image_under||image_gen||text_chat",
-        sample_rate=[3, 3, 3],
-        batchsize_list=[1,1,1]
-
+        image_under_data_files=data_args.image_under_data_files, # ['/storage/yqs/dataset/BAAI/DenseFusion-1M/DenseFusion-4V-100k/mini_uni_DenseFusion-4V-100k.json'], 
+        image_under_rootdir=data_args.image_under_rootdir, #'/storage/yqs/dataset/BAAI/DenseFusion-1M/images',
+        image_gen_data_files=data_args.image_gen_data_files, #['/storage/dataset/filter_aes/cap_merge_final_640/recap2/mini_janus_part0_cap6595998.json'],
+        image_gen_rootdir=data_args.image_gen_rootdir, #'/storage/dataset/recap_datacomp_1b_data_20241023_supply/output_undownloaded',
+        text_chat_data_files=data_args.text_chat_data_files, #['/storage/yqs/dataset/BAAI/Infinity-Instruct/7M_domains/subjective/mini_output.json'],
+        samples_per_epoch=data_args.samples_per_epoch, #100000,
+        dataset=data_args.dataset, #"image_under||image_gen||text_chat",
+        sample_rate=data_args.sample_rate, #[5, 4, 1],
+        batchsize_list=data_args.batchsize_list #[1,1,1]
     )
 
 
@@ -114,6 +122,8 @@ def train():
     set_seed(42)
 
     parser = transformers.HfArgumentParser((ModelArguments, DataArguments, TrainingArguments))
+    
+
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
 
     local_rank = training_args.local_rank
@@ -259,7 +269,8 @@ def train():
 
     # select a Trainer
     trainer = JanusTrainer(model=model, tokenizer=tokenizer, args=training_args, **data_module)
-
+    
+    # import ipdb; ipdb.set_trace()
     if list(pathlib.Path(training_args.output_dir).glob("checkpoint-*")):
         trainer.train(resume_from_checkpoint=True)
     else:

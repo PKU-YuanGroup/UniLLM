@@ -11,10 +11,10 @@ from tqdm import tqdm, trange
 from einops import rearrange
 from torchvision.utils import make_grid
 from torchvision.transforms import ToTensor
-from transformers import AutoModelForCausalLM
+from transformers import AutoModelForCausalLM,AutoTokenizer
 from janus.models import MultiModalityCausalLM, VLChatProcessor
 
-
+from janus.models.modeling_vlm import MultiModalityConfig
 @torch.inference_mode()
 def generate(
     mmgpt: MultiModalityCausalLM,
@@ -107,18 +107,19 @@ def split_list(lst, n):
 def get_chunk(lst, n, k):
     chunks = split_list(lst, n)
     return chunks[k]
-
+from janus.models.modeling_vlm import MultiModalityConfig
 def main(opt):
     # Load prompts
     prompts_files=os.listdir(opt.prompt_dirs)
     prompts_files = get_chunk(prompts_files, opt.num_chunks, opt.chunk_idx)
     model_path = opt.model_path
-    vl_chat_processor: VLChatProcessor = VLChatProcessor.from_pretrained(model_path)
-    tokenizer = vl_chat_processor.tokenizer
-
+    config = MultiModalityConfig.from_pretrained(model_path, cache_dir='./cache_dir')
     vl_gpt: MultiModalityCausalLM = AutoModelForCausalLM.from_pretrained(
-        model_path, trust_remote_code=True
+        model_path, trust_remote_code=True, config=config,  cache_dir='./cache_dir'
     )
+    vl_chat_processor: VLChatProcessor = VLChatProcessor.from_pretrained("/storage/jp/Janus/Janus-Pro-1B")
+    tokenizer = AutoTokenizer.from_pretrained(model_path)
+    vl_chat_processor.tokenizer=tokenizer
     vl_gpt = vl_gpt.to(torch.bfloat16).cuda().eval()
     os.makedirs(opt.outdir, exist_ok=True)
     for prompt_file in tqdm(prompts_files):

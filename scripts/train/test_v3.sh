@@ -22,7 +22,7 @@ echo "WORLD_SIZE: $WORLD_SIZE"
 echo "NPROC_PER_NODE: $NPROC_PER_NODE"
 
 # Training Arguments
-GLOBAL_BATCH_SIZE=128
+GLOBAL_BATCH_SIZE=80
 LOCAL_BATCH_SIZE=1
 GRADIENT_ACCUMULATION_STEPS=$[$GLOBAL_BATCH_SIZE/($WORLD_SIZE*$NPROC_PER_NODE*$LOCAL_BATCH_SIZE)]
 echo $GRADIENT_ACCUMULATION_STEPS
@@ -31,17 +31,18 @@ echo $GRADIENT_ACCUMULATION_STEPS
 export WANDB_PROJECT=videollama3_qwen2.5_2b
 RUN_NAME=stage_1
 DATA_DIR=/storage/dataset/filter_aes/final_coyo
-OUTP_DIR=work_dirs_0
+OUTP_DIR=work_dirs_0219_1
 
-rm -r OUTP_DIR
+
+conda activate janus_pro
+
 # conda activate janus_pro
-
 torchrun --nnodes $WORLD_SIZE \
     --nproc_per_node $NPROC_PER_NODE \
     --master_addr=$MASTER_ADDR \
     --master_port=$MASTER_PORT \
     --node_rank $RANK \
-    trainer/train.py \
+    trainer/train_v2.py \
     --deepspeed scripts/zero1.json \
     --model_type videollama3_qwen2 \
     --model_path /storage/jp/Janus/Janus-Pro-1B \
@@ -53,7 +54,7 @@ torchrun --nnodes $WORLD_SIZE \
     --output_dir ${OUTP_DIR}/${WANDB_PROJECT}/${RUN_NAME} \
     --num_train_epochs 1 \
     --per_device_train_batch_size $LOCAL_BATCH_SIZE \
-    --per_device_eval_batch_size 4 \
+    --per_device_eval_batch_size 1 \
     --gradient_accumulation_steps $GRADIENT_ACCUMULATION_STEPS \
     --evaluation_strategy "no" \
     --save_strategy "steps" \
@@ -63,7 +64,7 @@ torchrun --nnodes $WORLD_SIZE \
     --weight_decay 0. \
     --warmup_ratio 0.03 \
     --lr_scheduler_type "cosine" \
-    --logging_steps 1 \
+    --logging_steps 10 \
     --gradient_checkpointing True \
     --dataloader_num_workers 16 \
     --report_to tensorboard \

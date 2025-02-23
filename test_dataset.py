@@ -430,7 +430,7 @@ dataset = UniDataset(
     text_chat_data_files=['/storage/yqs/dataset/BAAI/Infinity-Instruct/7M_domains/subjective/mini_output.json'],
     samples_per_epoch=1000000,
     dataset="image_under||image_gen||text_chat",
-    sample_rate=[3, 3, 3],
+    sample_rate=[0, 3, 0],
     batchsize_list=[1,2,3]
 )
 
@@ -479,7 +479,7 @@ else:
     dataloader = DataLoader(dataset,  batch_size=1, drop_last=True, num_workers=0, collate_fn=DataCollatorWithFlatteningForSupervisedDataset(vlprocessor=vl_chat_processor))
     # 迭代并打印每个进程处理的 batch 数据
     for batch in dataloader:
-        # import ipdb; ipdb.set_trace()
+        import ipdb; ipdb.set_trace()
         # try:
         print(f"Batch: {len(batch)}")
 

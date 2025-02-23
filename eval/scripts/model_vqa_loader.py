@@ -4,7 +4,7 @@ import os
 import json
 from tqdm import tqdm
 import shortuuid
-from transformers import AutoModelForCausalLM
+from transformers import AutoModelForCausalLM,AutoTokenizer
 from janus.models import MultiModalityCausalLM, VLChatProcessor
 from janus.utils.io import load_pil_images
 from torch.utils.data import Dataset, DataLoader
@@ -64,16 +64,17 @@ def create_data_loader(questions, image_folder, processor, batch_size=1, num_wor
     dataset = CustomDataset(questions, image_folder, processor)
     data_loader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers,collate_fn=simple_collate_fn, shuffle=False)
     return data_loader
-
+from janus.models.modeling_vlm import MultiModalityConfig
 
 def eval_model(args):
     # Model
-    vl_chat_processor: VLChatProcessor = VLChatProcessor.from_pretrained(args.model_path)
-    tokenizer = vl_chat_processor.tokenizer
-
+    config = MultiModalityConfig.from_pretrained(args.model_path, cache_dir='./cache_dir')
     vl_gpt: MultiModalityCausalLM = AutoModelForCausalLM.from_pretrained(
-        args.model_path, trust_remote_code=True
+        args.model_path, trust_remote_code=True, config=config,  cache_dir='./cache_dir'
     )
+    vl_chat_processor: VLChatProcessor = VLChatProcessor.from_pretrained("/storage/jp/Janus/Janus-Pro-1B")
+    tokenizer = AutoTokenizer.from_pretrained(args.model_path)
+    vl_chat_processor.tokenizer=tokenizer
     vl_gpt = vl_gpt.to(torch.bfloat16).cuda().eval()
     questions = [json.loads(q) for q in open(os.path.expanduser(args.question_file), "r")]
     questions = get_chunk(questions, args.num_chunks, args.chunk_idx)

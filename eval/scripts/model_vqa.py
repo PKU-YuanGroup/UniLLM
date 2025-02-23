@@ -5,10 +5,10 @@ import json
 from tqdm import tqdm
 import shortuuid
 
-from transformers import AutoModelForCausalLM
+from transformers import AutoModelForCausalLM,AutoTokenizer
 from janus.models import MultiModalityCausalLM, VLChatProcessor
 from janus.utils.io import load_pil_images
-
+from janus.models.modeling_vlm import MultiModalityConfig
 from PIL import Image
 import math
 
@@ -26,12 +26,12 @@ def get_chunk(lst, n, k):
 
 def eval_model(args):
     # Model
-    vl_chat_processor: VLChatProcessor = VLChatProcessor.from_pretrained(args.model_path)
-    tokenizer = vl_chat_processor.tokenizer
-
+    config = MultiModalityConfig.from_pretrained(args.model_path, cache_dir='./cache_dir')
     vl_gpt: MultiModalityCausalLM = AutoModelForCausalLM.from_pretrained(
-        args.model_path, trust_remote_code=True
+        args.model_path, trust_remote_code=True, config=config,  cache_dir='./cache_dir'
     )
+    vl_chat_processor: VLChatProcessor = VLChatProcessor.from_pretrained("/storage/jp/Janus/Janus-Pro-1B")
+    tokenizer = AutoTokenizer.from_pretrained(args.model_path)
     vl_gpt = vl_gpt.to(torch.bfloat16).cuda().eval()
     questions = [json.loads(q) for q in open(os.path.expanduser(args.question_file), "r")]
     questions = get_chunk(questions, args.num_chunks, args.chunk_idx)

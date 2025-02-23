@@ -1,11 +1,19 @@
 #!/bin/bash
 # Environment Variables
 ARG_WORLD_SIZE=${1:-1}
-ARG_NPROC_PER_NODE=${2:-8}
+# ARG_RANK=0
+ARG_RANK=${2:-8}
+
+echo $ARG_WORLD_SIZE  $ARG_RANK
+# ARG_NPROC_PER_NODE=${2:-8}
 ARG_NPROC_PER_NODE=8
-ARG_MASTER_ADDR="127.0.0.1"
-ARG_MASTER_PORT=16668
-ARG_RANK=0
+
+# ARG_MASTER_ADDR="127.0.0.1"
+ARG_MASTER_ADDR=$3
+
+
+ARG_MASTER_PORT=16667
+
 
 # Multiple conditions
 if [ ! -n "$WORLD_SIZE" ] || [ ! -n "$NPROC_PER_NODE" ]; then
@@ -18,11 +26,30 @@ if [ ! -n "$MASTER_ADDR" ] || [ ! -n "$MASTER_PORT" ] || [ ! -n "$RANK" ]; then
     RANK=$ARG_RANK
 fi
 
+
+# NCCL setting
+export GLOO_SOCKET_IFNAME=bond0
+export NCCL_SOCKET_IFNAME=bond0
+export NCCL_IB_HCA=mlx5_10:1,mlx5_11:1,mlx5_12:1,mlx5_13:1
+export NCCL_IB_GID_INDEX=3
+export NCCL_IB_TC=162
+export NCCL_IB_TIMEOUT=25
+export NCCL_PXN_DISABLE=0
+export NCCL_IB_QPS_PER_CONNECTION=4
+export NCCL_ALGO=Ring
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export NCCL_IB_RETRY_CNT=32
+
+
+
+
+cd  /storage/jp/Janus
 echo "WORLD_SIZE: $WORLD_SIZE"
 echo "NPROC_PER_NODE: $NPROC_PER_NODE"
 
 # Training Arguments
-GLOBAL_BATCH_SIZE=80
+GLOBAL_BATCH_SIZE=256
 LOCAL_BATCH_SIZE=1
 GRADIENT_ACCUMULATION_STEPS=$[$GLOBAL_BATCH_SIZE/($WORLD_SIZE*$NPROC_PER_NODE*$LOCAL_BATCH_SIZE)]
 echo $GRADIENT_ACCUMULATION_STEPS
@@ -31,12 +58,17 @@ echo $GRADIENT_ACCUMULATION_STEPS
 export WANDB_PROJECT=videollama3_qwen2.5_2b
 RUN_NAME=stage_1
 DATA_DIR=/storage/dataset/filter_aes/final_coyo
-OUTP_DIR=work_dirs_0221
+OUTP_DIR=work_dirs_0222
 
 cd /storage/jp/Janus
 source /storage/miniconda3/etc/profile.d/conda.sh
 conda activate janus_pro
 
+# --llm_lr 4e-5 \
+# --vision_encoder_lr 4e-5 
+# --llm_lr 4e-5 \
+# --vision_encoder_lr 4e-5 \
+export CUDA_LAUNCH_BLOCKING=1
 # conda activate janus_pro
 torchrun --nnodes $WORLD_SIZE \
     --nproc_per_node $NPROC_PER_NODE \
@@ -61,12 +93,10 @@ torchrun --nnodes $WORLD_SIZE \
     --save_strategy "steps" \
     --save_steps 1000 \
     --save_total_limit 2 \
-    --llm_lr 4e-5 \
-    --vision_encoder_lr 4e-5 \
-    --aligner_lr 4e-5 \
-    --gen_aligner_lr 4e-5 \
-    --gen_head_lr 4e-5 \
-    --gen_embed_lr 4e-5 \
+    --aligner_lr 1e-3 \
+    --gen_aligner_lr 1e-3 \
+    --gen_head_lr 1e-3 \
+    --gen_embed_lr 1e-3 \
     --weight_decay 0. \
     --warmup_ratio 0.03 \
     --lr_scheduler_type "cosine" \
@@ -75,15 +105,25 @@ torchrun --nnodes $WORLD_SIZE \
     --dataloader_num_workers 16 \
     --report_to tensorboard \
     --run_name $RUN_NAME \
-    --sample_rate  5,4,1 \
-    --batchsize_list  1,1,1 \
-    --samples_per_epoch 10000 \
+    --sample_rate  1,3,0 \
+    --batchsize_list  8,16,2 \
+    --samples_per_epoch $[20000*256] \
     --dataset "image_under||image_gen||text_chat" \
-    --image_under_data_files  /storage/yqs/dataset/BAAI/DenseFusion-1M/DenseFusion-4V-100k/mini_uni_DenseFusion-4V-100k.json \
+    --image_under_data_files  /storage/yqs/dataset/BAAI/DenseFusion-1M/DenseFusion-4V-100k/uni_DenseFusion-4V-100k.json \
     --image_under_rootdir /storage/yqs/dataset/BAAI/DenseFusion-1M/images \
-    --image_gen_data_files  /storage/dataset/filter_aes/cap_merge_final_640/recap2/mini_janus_part0_cap6595998.json \
+    --image_gen_data_files  /storage/dataset/filter_aes/cap_merge_final_640/recap2/uni_part0_cap6595998.json \
     --image_gen_rootdir  /storage/dataset/recap_datacomp_1b_data_20241023_supply/output_undownloaded \
-    --text_chat_data_files  /storage/yqs/dataset/BAAI/Infinity-Instruct/7M_domains/subjective/mini_output.json \
+    --text_chat_data_files  /storage/yqs/dataset/BAAI/Infinity-Instruct/7M_domains/subjective/output.json
+
+
+    # --image_under_data_files  /storage/yqs/dataset/BAAI/DenseFusion-1M/DenseFusion-4V-100k/mini_uni_DenseFusion-4V-100k.json \
+    # --image_under_rootdir /storage/yqs/dataset/BAAI/DenseFusion-1M/images \
+    # --image_gen_data_files  /storage/dataset/filter_aes/cap_merge_final_640/recap2/mini_janus_part0_cap6595998.json \
+    # --image_gen_rootdir  /storage/dataset/recap_datacomp_1b_data_20241023_supply/output_undownloaded \
+    # --text_chat_data_files  /storage/yqs/dataset/BAAI/Infinity-Instruct/7M_domains/subjective/mini_output.json \
+
+    # img_und  bs 12  76g  zero1 
+    # txet_chat  bs 2 65927MiB  zero1 
 
 
 

@@ -125,7 +125,7 @@ def split_list(lst, n):
 def get_chunk(lst, n, k):
     chunks,chunk_size = split_list(lst, n)
     return chunks[k],chunk_size
-
+from janus.models.modeling_vlm import MultiModalityConfig
 def main(opt):
     # Load prompts
     with open(opt.metadata_file) as fp:
@@ -134,12 +134,12 @@ def main(opt):
     offset=chunk_size*opt.chunk_idx
 
     model_path = opt.model_path
-    vl_chat_processor: VLChatProcessor = VLChatProcessor.from_pretrained(model_path)
-    tokenizer = vl_chat_processor.tokenizer
-
+    config = MultiModalityConfig.from_pretrained(model_path, cache_dir='./cache_dir')
     vl_gpt: MultiModalityCausalLM = AutoModelForCausalLM.from_pretrained(
-        model_path, trust_remote_code=True
+        model_path, trust_remote_code=True, config=config,  cache_dir='./cache_dir'
     )
+    vl_chat_processor: VLChatProcessor = VLChatProcessor.from_pretrained("/storage/jp/Janus/Janus-Pro-1B")
+    tokenizer = vl_chat_processor.tokenizer
     vl_gpt = vl_gpt.to(torch.bfloat16).cuda().eval()
     
 

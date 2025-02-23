@@ -328,6 +328,7 @@ class VLChatProcessor(ProcessorMixin):
 
         if is_training and modal == "image_gen":
             targets = torch.full_like(input_ids, self.ignore_id)
+            targets[-1] = input_ids[-1]
             num_image_tokens = [576]
         elif is_training:
             training_input_ids_list = []
@@ -520,9 +521,14 @@ class VLChatProcessor(ProcessorMixin):
             sft_format.append(prepare.sft_format)
 
             if prepare.labels is not None:
+                # import ipdb; ipdb.set_trace()
                 labels = prepare.labels
                 batched_labels_ids[i, -seq_len:] = torch.LongTensor(labels)
 
+        # No need to calculate the loss of pad tokens
+        batched_labels_ids = torch.where(batched_labels_ids == self.pad_id, -100, batched_labels_ids) # 100015 
+
+        
         batched_prepares = BatchedVLChatProcessorOutput(
             input_ids=batched_input_ids,
             labels=batched_labels_ids,

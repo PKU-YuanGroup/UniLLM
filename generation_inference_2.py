@@ -45,7 +45,8 @@ def generate(
     image_token_num_per_image: int = 576,
     img_size: int = 384,
     patch_size: int = 16,
-):
+):  
+    image_token_num_per_image = 1 + 36 + 576
     input_ids = vl_chat_processor.tokenizer.encode(prompt)
     input_ids = torch.LongTensor(input_ids)
 
@@ -56,7 +57,6 @@ def generate(
             tokens[i, 1:-1] = vl_chat_processor.pad_id
 
     inputs_embeds = mmgpt.language_model.get_input_embeddings()(tokens)
-
     generated_tokens = torch.zeros((parallel_size, image_token_num_per_image), dtype=torch.int).cuda()
 
     for i in range(image_token_num_per_image):
@@ -76,7 +76,13 @@ def generate(
         next_token = torch.cat([next_token.unsqueeze(dim=1), next_token.unsqueeze(dim=1)], dim=1).view(-1)
         img_embeds = mmgpt.prepare_gen_img_embeds(next_token)
         inputs_embeds = img_embeds.unsqueeze(dim=1)
-
+        if i < 1:
+            _idx = 0
+        elif i < 37:
+            _idx = 1
+        else:
+            _idx = 2
+        inputs_embeds = inputs_embeds + mmgpt.var_embedding(torch.full_like(torch.zeros((parallel_size*2, 1), dtype=torch.int).cuda(), _idx))
 
     dec = mmgpt.gen_vision_model.decode_code(generated_tokens.to(dtype=torch.int), shape=[parallel_size, 8, img_size//patch_size, img_size//patch_size])
     dec = dec.to(torch.float32).cpu().numpy().transpose(0, 2, 3, 1)

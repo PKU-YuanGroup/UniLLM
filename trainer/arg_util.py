@@ -44,6 +44,19 @@ class DataArguments:
     dataset_cache_dir: Optional[str] = field(default=None)
     short_cap: Optional[float] = field(default=0.2)
 
+    image_under_data_files: Optional[str] = field(default='/storage/yqs/dataset/BAAI/DenseFusion-1M/DenseFusion-4V-100k/mini_uni_DenseFusion-4V-100k.json')
+    image_under_rootdir: Optional[str] = field(default='/storage/yqs/dataset/BAAI/DenseFusion-1M/images')
+    image_gen_data_files: Optional[str] = field(default='/storage/dataset/filter_aes/cap_merge_final_640/recap2/mini_janus_part0_cap6595998.json')
+    image_gen_rootdir: Optional[str] = field(default='/storage/dataset/recap_datacomp_1b_data_20241023_supply/output_undownloaded')
+    text_chat_data_files: Optional[str] = field(default='/storage/yqs/dataset/BAAI/Infinity-Instruct/7M_domains/subjective/mini_output.json')
+    sample_rate: Optional[str] = field(default=None)
+    samples_per_epoch: int = field(
+        default=10000,
+        metadata={"help": "samples_per_epoch."}
+    )
+    batchsize_list: Optional[str] = field(default='1,1,1')
+    dataset: Optional[str] = field(default="image_under||image_gen||text_chat")
+
 
 @dataclass
 class TrainingArguments(transformers.TrainingArguments):
@@ -87,3 +100,4 @@ class TrainingArguments(transformers.TrainingArguments):
     lora_dropout: float = 0.05
     lora_weight_path: str = ""
     lora_bias: str = "none"
+    dataloader_prefetch_factor: int =  16

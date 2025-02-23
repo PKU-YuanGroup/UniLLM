@@ -798,7 +798,9 @@ class LlamaForCausalLM(LlamaPreTrainedModel, GenerationMixin):
         return_dict: Optional[bool] = None,
         cache_position: Optional[torch.LongTensor] = None,
         logits_to_keep: Union[int, torch.Tensor] = 0,
-        return_image_embeds: Optional[bool] = None,
+        image_gen: Optional[bool] = None,
+        vocab_size: Union[int, torch.Tensor] = 0,
+        gen_head: Optional[bool] = None,
         **kwargs: Unpack[KwargsForCausalLM],
     ) -> Union[Tuple, CausalLMOutputWithPast]:
         r"""
@@ -833,6 +835,8 @@ class LlamaForCausalLM(LlamaPreTrainedModel, GenerationMixin):
         >>> tokenizer.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
         "Hey, are you conscious? Can you talk to me?\nI'm not conscious, but I can talk to you."
         ```"""
+
+        
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
@@ -855,16 +859,17 @@ class LlamaForCausalLM(LlamaPreTrainedModel, GenerationMixin):
         )
 
         hidden_states = outputs[0]
-        if return_image_embeds:
-            return hidden_states
         # Only compute necessary logits, and do not upcast them to float if we are not computing the loss
         slice_indices = slice(-logits_to_keep, None) if isinstance(logits_to_keep, int) else logits_to_keep
-        logits = self.lm_head(hidden_states[:, slice_indices, :])
+        if image_gen:
+            logits = gen_head(hidden_states[:, slice_indices, :])
+        else:
+            logits = self.lm_head(hidden_states[:, slice_indices, :])
 
         loss = None
+        # import ipdb; ipdb.set_trace()
         if labels is not None:
-            loss = self.loss_function(logits=logits, labels=labels, vocab_size=self.config.vocab_size, **kwargs)
-
+            loss = self.loss_function(logits=logits, labels=labels, vocab_size=self.config.vocab_size if not vocab_size else vocab_size, **kwargs)
         if not return_dict:
             output = (logits,) + outputs[1:]
             return (loss,) + output if loss is not None else output

@@ -1,17 +1,18 @@
 import torch
 from transformers import AutoModelForCausalLM
+from janus.models.modeling_vlm import MultiModalityConfig
 from janus.models import MultiModalityCausalLM, VLChatProcessor
 from janus.utils.io import load_pil_images
-
 # specify the path to the model
-model_path = "deepseek-ai/Janus-Pro-7B"
-vl_chat_processor: VLChatProcessor = VLChatProcessor.from_pretrained(model_path)
+model_path = "/storage/jp/Janus/work_dirs_0218/videollama3_qwen2.5_2b/stage_1/checkpoint-12000"
+config = MultiModalityConfig.from_pretrained(model_path, cache_dir='./cache_dir')
+model: MultiModalityCausalLM = AutoModelForCausalLM.from_pretrained(
+    model_path, trust_remote_code=True, config=config,  cache_dir='./cache_dir'
+)
+vl_chat_processor: VLChatProcessor = VLChatProcessor.from_pretrained("/storage/jp/Janus/Janus-Pro-1B")
 tokenizer = vl_chat_processor.tokenizer
 
-vl_gpt: MultiModalityCausalLM = AutoModelForCausalLM.from_pretrained(
-    model_path, trust_remote_code=True
-)
-vl_gpt = vl_gpt.to(torch.bfloat16).cuda().eval()
+vl_gpt = model.to(torch.bfloat16).cuda().eval()
 
 question = "Describe the image."
 image = "./generated_samples/img_0.jpg"
@@ -30,8 +31,8 @@ pil_images = load_pil_images(conversation)
 prepare_inputs = vl_chat_processor(
     conversations=conversation, images=pil_images, force_batchify=True
 ).to(vl_gpt.device)
-print(prepare_inputs)
-exit()
+#print(prepare_inputs)
+#exit()
 # # run image encoder to get the image embeddings
 inputs_embeds = vl_gpt.prepare_inputs_embeds(**prepare_inputs)
 
