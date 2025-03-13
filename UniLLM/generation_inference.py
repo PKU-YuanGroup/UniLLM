@@ -1,37 +1,18 @@
-# Copyright (c) 2023-2024 DeepSeek.
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy of
-# this software and associated documentation files (the "Software"), to deal in
-# the Software without restriction, including without limitation the rights to
-# use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
-# the Software, and to permit persons to whom the Software is furnished to do so,
-# subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
-# FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
-# COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
-# IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-# CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-import torch
-from transformers import AutoModelForCausalLM
-
-from janus.models import MultiModalityCausalLM, VLChatProcessor
-import numpy as np
 import os
 import PIL.Image
+import torch
+import numpy as np
+from transformers import AutoModelForCausalLM
+from janus.models import MultiModalityCausalLM, VLChatProcessor
+
 
 # specify the path to the model
 model_path = "/storage/jp/Janus/Janus-Pro-1B"
 vl_chat_processor: VLChatProcessor = VLChatProcessor.from_pretrained(model_path)
 tokenizer = vl_chat_processor.tokenizer
 
-
-model_path = "/storage/zhubin/Janus-zb/checkpoints/stage1_1scale_384_sdpa_ft/videollama3_qwen2.5_2b/stage_1/checkpoint-1000"
+model_path = "/storage/jp/Janus/work_dirs_0219_1/videollama3_qwen2.5_2b/stage_1"
+model_path = "/storage/jp/Janus/work_dirs_0222/videollama3_qwen2.5_2b/stage_1/checkpoint-1000"
 vl_gpt: MultiModalityCausalLM = AutoModelForCausalLM.from_pretrained(
     model_path, trust_remote_code=True
 )
@@ -39,10 +20,10 @@ vl_gpt = vl_gpt.to(torch.bfloat16).cuda().eval()
 
 conversation = [
     {
-        "role": "User",
-        "content": "A close-up high-contrast photo of Sydney Opera House sitting next to Eiffel tower, under a blue night sky of roiling energy, exploding yellow stars, and radiating swirls of blue.",
+        "role": "<|User|>",
+        "content": "A stunning princess from kabul in red, white traditional clothing, blue eyes, brown hair",
     },
-    {"role": "Assistant", "content": ""},
+    {"role": "<|Assistant|>", "content": ""},
 ]
 
 sft_format = vl_chat_processor.apply_sft_template_for_multi_turn_prompts(
@@ -116,20 +97,3 @@ generate(
     vl_chat_processor,
     prompt,
 )
-
-
-
-"""
-
-cd  /storage/zhubin/Janus-zb 
-source /storage/miniconda3/etc/profile.d/conda.sh
-conda activate janus_pro
-
-python /storage/zhubin/Janus-zb/generation_inference.py
-
-
-
-tensorboard --logdir=/storage/jp/Janus/checkpoints/singlescale_arloss_unidata_flashattn_0312_2245/videollama3_qwen2.5_2b/stage_1/runs/Mar12_23-44-00_node037
-
-
-"""

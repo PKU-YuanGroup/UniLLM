@@ -1,0 +1,156 @@
+[
+    { 
+        "image_gen": ["reconstructed_samples_0305/nkp_input.jpg"],
+        "conversations": [
+            {
+                "from": "human",
+                "value": ["a red and white bus", "a bus"]
+            },
+            {
+                "from": "gpt",
+                "value": ""
+            } 
+           
+        ]
+    },
+    { 
+        "image_gen": ["reconstructed_samples_0305/nkp_input.jpg"],
+        "conversations": [
+            {
+                "from": "human",
+                "value": ["a red and white bus", "a bus"]
+            },
+            {
+                "from": "gpt",
+                "value": ""
+            } 
+           
+        ]
+    },
+    { 
+        "image_gen": ["reconstructed_samples_0305/nkp_input.jpg"],
+        "conversations": [
+            {
+                "from": "human",
+                "value": ["a red and white bus", "a bus"]
+            },
+            {
+                "from": "gpt",
+                "value": ""
+            } 
+           
+        ]
+    },
+    { 
+        "image_gen": ["reconstructed_samples_0305/nkp_input.jpg"],
+        "conversations": [
+            {
+                "from": "human",
+                "value": ["a red and white bus", "a bus"]
+            },
+            {
+                "from": "gpt",
+                "value": ""
+            } 
+           
+        ]
+    },
+    { 
+        "image_gen": ["reconstructed_samples_0305/nkp_input.jpg"],
+        "conversations": [
+            {
+                "from": "human",
+                "value": ["a red and white bus", "a bus"]
+            },
+            {
+                "from": "gpt",
+                "value": ""
+            } 
+           
+        ]
+    },
+    { 
+        "image_gen": ["reconstructed_samples_0305/nkp_input.jpg"],
+        "conversations": [
+            {
+                "from": "human",
+                "value": ["a red and white bus", "a bus"]
+            },
+            {
+                "from": "gpt",
+                "value": ""
+            } 
+           
+        ]
+    },
+    { 
+        "image_gen": ["reconstructed_samples_0305/nkp_input.jpg"],
+        "conversations": [
+            {
+                "from": "human",
+                "value": ["a red and white bus", "a bus"]
+            },
+            {
+                "from": "gpt",
+                "value": ""
+            } 
+           
+        ]
+    },
+    { 
+        "image_gen": ["reconstructed_samples_0305/nkp_input.jpg"],
+        "conversations": [
+            {
+                "from": "human",
+                "value": ["a red and white bus", "a bus"]
+            },
+            {
+                "from": "gpt",
+                "value": ""
+            } 
+           
+        ]
+    },
+    { 
+        "image_gen": ["reconstructed_samples_0305/nkp_input.jpg"],
+        "conversations": [
+            {
+                "from": "human",
+                "value": ["a red and white bus", "a bus"]
+            },
+            {
+                "from": "gpt",
+                "value": ""
+            } 
+           
+        ]
+    },
+    { 
+        "image_gen": ["reconstructed_samples_0305/nkp_input.jpg"],
+        "conversations": [
+            {
+                "from": "human",
+                "value": ["a red and white bus", "a bus"]
+            },
+            {
+                "from": "gpt",
+                "value": ""
+            } 
+           
+        ]
+    },
+    { 
+        "image_gen": ["reconstructed_samples_0305/nkp_input.jpg"],
+        "conversations": [
+            {
+                "from": "human",
+                "value": ["a red and white bus", "a bus"]
+            },
+            {
+                "from": "gpt",
+                "value": ""
+            } 
+           
+        ]
+    }
+]

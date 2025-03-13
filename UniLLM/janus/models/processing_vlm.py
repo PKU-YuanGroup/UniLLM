@@ -96,9 +96,6 @@ class VLChatProcessor(ProcessorMixin):
         sft_format: str = "deepseek",
         mask_prompt: bool = True,
         ignore_id: int = -100,
-
-        tokenizer_model_max_length: int = 2048, 
-        use_tokenizer_pad: bool = False,
         **kwargs,
     ):
         self.image_processor = image_processor
@@ -121,10 +118,6 @@ class VLChatProcessor(ProcessorMixin):
         self.sft_format = sft_format
         self.mask_prompt = mask_prompt
         self.ignore_id = ignore_id
-
-
-        self.tokenizer_model_max_length = tokenizer_model_max_length
-        self.use_tokenizer_pad = use_tokenizer_pad
 
         self.generation_prompt_length = len(self.tokenizer.encode("<|Assistant|>:", return_tensors="pt"))
 
@@ -328,44 +321,15 @@ class VLChatProcessor(ProcessorMixin):
             )
         else:
             sft_format = prompt
-        # print(self.use_tokenizer_pad,"16546546")
 
-        # =================
-        # tokenize  pad for image generation prompt
-        if self.use_tokenizer_pad:
-            input_ids = self.tokenizer.encode(sft_format,
-                                            padding="max_length",  # 填充到最大长度
-                                                max_length=self.tokenizer_model_max_length,         # 设置最大长度
-                                                truncation=True,       # 截断超过最大长度的部分
-                                                # return_tensors="pt"    # 返回 PyTorch 张量, 不选择就返回一个list
-                                            )
-        else:
-            input_ids = self.tokenizer.encode(sft_format,
-                                            # padding="max_length",  # 填充到最大长度
-                                             max_length=self.tokenizer_model_max_length,         # 设置最大长度
-                                             truncation=True,       # 截断超过最大长度的部分
-                                                # return_tensors="pt"    # 返回 PyTorch 张量, 不选择就返回一个list
-                                            )
-
-        
-        # Truncate sequences to max length as image embeddings can make the sequence longer, for image generation
-        if self.tokenizer_model_max_length is not None:
-            # import ipdb; ipdb.set_trace()
-            # print(f'inputs ids length:{len(input_ids)} ==== {self.tokenizer_model_max_length}!')
-            if len(input_ids) > self.tokenizer_model_max_length:
-                print(f'inputs ids length:{len(input_ids)} is longer than {self.tokenizer_model_max_length}!')
-            input_ids =  input_ids[:self.tokenizer_model_max_length]
-        # =================
-
-
+        # tokenize
+        input_ids = self.tokenizer.encode(sft_format)
         input_ids = torch.LongTensor(input_ids)
 
         if is_training and modal == "image_gen":
             targets = torch.full_like(input_ids, self.ignore_id)
             targets[-1] = input_ids[-1]
             num_image_tokens = [576]
-
-
         elif is_training:
             training_input_ids_list = []
             targets_list = []
@@ -402,57 +366,6 @@ class VLChatProcessor(ProcessorMixin):
 
             targets = torch.cat(targets_list)
             sample_types = torch.cat(sample_types_list)
-            training_input_ids = torch.cat(training_input_ids_list)
-
-
-            # truncation
-            import torch.nn.functional as F
-            def pad_to_max_length(tensor, max_length, pad_value=-100):
-                """
-                将张量填充到指定长度，前部填充 pad_value。
-                """
-
-                
-                current_length = tensor.size(0)  # 获取当前长度
-                if current_length < max_length:
-                    # 计算需要填充的长度
-                    pad_length = max_length - current_length
-                    # 在前部填充 pad_value
-                    padded_tensor = F.pad(tensor, (pad_length, 0), value=pad_value)
-                else:
-                    # 如果长度已经足够，直接截断
-                    
-                    padded_tensor = tensor[:max_length]
-                return padded_tensor
-
-            # 对 targets, sample_types, training_input_ids 进行填充
-            max_length = self.tokenizer_model_max_length
-
-
-            if self.use_tokenizer_pad:
-                targets = pad_to_max_length(targets, max_length, pad_value=self.ignore_id)
-                sample_types = pad_to_max_length(sample_types, max_length, pad_value=self.ignore_id)
-                training_input_ids = pad_to_max_length(training_input_ids, max_length, pad_value=self.ignore_id)
-            else:
-                targets =  targets[:self.tokenizer_model_max_length]
-                sample_types = sample_types[:self.tokenizer_model_max_length]
-                training_input_ids = training_input_ids[:self.tokenizer_model_max_length]
-
-            
-            
-
-            
-            """if self.tokenizer_model_max_length is not None:
-                # import ipdb; ipdb.set_trace()
-                print(f'inputs ids length:{len(targets)} ==== {self.tokenizer_model_max_length}!')
-                if len(targets) > self.tokenizer_model_max_length:
-                    print(f'inputs ids length:{len(targets)} is longer than {self.tokenizer_model_max_length}!')
-                targets =  targets[:self.tokenizer_model_max_length]
-                sample_types = sample_types[:self.tokenizer_model_max_length]
-                training_input_ids = training_input_ids[:self.tokenizer_model_max_length]"""
-
-
-
             types, counts = torch.unique(sample_types[sample_types > -1], return_counts=True)
 
             if len(types) > 0:
@@ -464,7 +377,16 @@ class VLChatProcessor(ProcessorMixin):
                         random_selector = torch.randperm(indices.size(0))[:-target_num_samples]
                         targets[indices[random_selector]] = self.ignore_id
                         sample_types[indices[random_selector]] = -1
- 
+
+            training_input_ids = torch.cat(training_input_ids_list)
+
+            
+            # try:
+            #     assert len(training_input_ids) == len(input_ids)
+            # except Exception as e:
+            #     import ipdb; ipdb.set_trace()
+            #     print(e)
+            # assert len(targets) == len(input_ids)
 
 
             input_ids = training_input_ids

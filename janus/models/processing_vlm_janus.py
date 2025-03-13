@@ -19,7 +19,7 @@
 
 from dataclasses import dataclass
 from typing import Dict, List
-import copy
+
 import torch
 from PIL.Image import Image
 from transformers import LlamaTokenizerFast
@@ -46,7 +46,6 @@ class VLChatProcessorOutput(DictOutput):
     input_ids: torch.Tensor
     pixel_values: torch.Tensor
     num_image_tokens: torch.IntTensor
-    labels: torch.Tensor
 
     def __len__(self):
         return len(self.input_ids)
@@ -56,7 +55,6 @@ class VLChatProcessorOutput(DictOutput):
 class BatchedVLChatProcessorOutput(DictOutput):
     sft_format: List[str]
     input_ids: torch.Tensor
-    labels: torch.Tensor
     pixel_values: torch.Tensor
     attention_mask: torch.Tensor
     images_seq_mask: torch.BoolTensor
@@ -96,9 +94,6 @@ class VLChatProcessor(ProcessorMixin):
         sft_format: str = "deepseek",
         mask_prompt: bool = True,
         ignore_id: int = -100,
-
-        tokenizer_model_max_length: int = 2048, 
-        use_tokenizer_pad: bool = False,
         **kwargs,
     ):
         self.image_processor = image_processor
@@ -121,12 +116,6 @@ class VLChatProcessor(ProcessorMixin):
         self.sft_format = sft_format
         self.mask_prompt = mask_prompt
         self.ignore_id = ignore_id
-
-
-        self.tokenizer_model_max_length = tokenizer_model_max_length
-        self.use_tokenizer_pad = use_tokenizer_pad
-
-        self.generation_prompt_length = len(self.tokenizer.encode("<|Assistant|>:", return_tensors="pt"))
 
         super().__init__(
             image_processor,
@@ -227,7 +216,6 @@ class VLChatProcessor(ProcessorMixin):
         self,
         image_indices: List[int],
         input_ids: torch.LongTensor,
-        targets: None,
     ):
         """
 
@@ -241,7 +229,6 @@ class VLChatProcessor(ProcessorMixin):
         """
 
         input_slices = []
-        targets_slices = []
 
         start = 0
         for index in image_indices:
@@ -259,37 +246,22 @@ class VLChatProcessor(ProcessorMixin):
                 self.image_id * torch.ones((self.num_image_tokens,), dtype=torch.long)
             )
             input_slices.append(self.image_end_id * torch.ones((1), dtype=torch.long))
-
-            if targets is not None:
-                targets_slices.append(targets[start:end])
-                targets_slices.append(self.ignore_id * torch.ones((1), dtype=torch.long))
-                targets_slices.append(
-                    self.ignore_id * torch.ones((self.num_image_tokens,), dtype=torch.long)
-                )
-                targets_slices.append(self.ignore_id * torch.ones((1), dtype=torch.long))
-
             start = index + 1
 
         # the left part
         input_slices.append(input_ids[start:])
-        
+
         # concat all slices
         input_ids = torch.cat(input_slices, dim=0)
         num_image_tokens = torch.IntTensor([self.num_image_tokens] * len(image_indices))
 
-        if targets is not None:
-            targets_slices.append(targets[start:])
-            targets = torch.cat(targets_slices, dim=0)
-
-        return input_ids, num_image_tokens, targets
+        return input_ids, num_image_tokens
 
     def process_one(
         self,
         prompt: str = None,
         conversations: List[Dict[str, str]] = None,
         images: List[Image] = None,
-        is_training: bool = False,
-        modal = None,
         **kwargs,
     ):
         """
@@ -313,13 +285,7 @@ class VLChatProcessor(ProcessorMixin):
             prompt is None or conversations is None
         ), "prompt and conversations cannot be used at the same time."
 
-        if modal == "image_gen":
-            sft_format = self.apply_sft_template_for_multi_turn_prompts(
-                conversations=conversations,
-                sft_format=self.sft_format,
-                system_prompt="",
-                )
-        elif prompt is None:
+        if prompt is None:
             # apply sft format
             sft_format = self.apply_sft_template_for_multi_turn_prompts(
                 conversations=conversations,
@@ -328,167 +294,18 @@ class VLChatProcessor(ProcessorMixin):
             )
         else:
             sft_format = prompt
-        # print(self.use_tokenizer_pad,"16546546")
 
-        # =================
-        # tokenize  pad for image generation prompt
-        if self.use_tokenizer_pad:
-            input_ids = self.tokenizer.encode(sft_format,
-                                            padding="max_length",  # 填充到最大长度
-                                                max_length=self.tokenizer_model_max_length,         # 设置最大长度
-                                                truncation=True,       # 截断超过最大长度的部分
-                                                # return_tensors="pt"    # 返回 PyTorch 张量, 不选择就返回一个list
-                                            )
-        else:
-            input_ids = self.tokenizer.encode(sft_format,
-                                            # padding="max_length",  # 填充到最大长度
-                                             max_length=self.tokenizer_model_max_length,         # 设置最大长度
-                                             truncation=True,       # 截断超过最大长度的部分
-                                                # return_tensors="pt"    # 返回 PyTorch 张量, 不选择就返回一个list
-                                            )
-
-        
-        # Truncate sequences to max length as image embeddings can make the sequence longer, for image generation
-        if self.tokenizer_model_max_length is not None:
-            # import ipdb; ipdb.set_trace()
-            # print(f'inputs ids length:{len(input_ids)} ==== {self.tokenizer_model_max_length}!')
-            if len(input_ids) > self.tokenizer_model_max_length:
-                print(f'inputs ids length:{len(input_ids)} is longer than {self.tokenizer_model_max_length}!')
-            input_ids =  input_ids[:self.tokenizer_model_max_length]
-        # =================
-
-
+        # tokenize
+        input_ids = self.tokenizer.encode(sft_format)
         input_ids = torch.LongTensor(input_ids)
 
-        if is_training and modal == "image_gen":
-            targets = torch.full_like(input_ids, self.ignore_id)
-            targets[-1] = input_ids[-1]
-            num_image_tokens = [576]
-
-
-        elif is_training:
-            training_input_ids_list = []
-            targets_list = []
-            sample_types_list = []
-
-            for message_idx, message in enumerate(conversations):
-                if message_idx == 0:
-                    prompt = self.apply_sft_template_for_multi_turn_prompts(
-                                conversations=[message],
-                                sft_format=self.sft_format,
-                                system_prompt=self.system_prompt,
-                                )
-                else:
-                    prompt = message["role"] + ": " + message["content"]
-
-                if message["role"] == "<|Assistant|>":
-                    prompt += "<｜end▁of▁sentence｜>"
-                else:
-                    prompt += "\n\n"
-            
-                if message_idx != 0:
-                    training_input_ids = self.tokenizer.encode(prompt, return_tensors="pt")[0][1:]
-                else:
-                    training_input_ids = self.tokenizer.encode(prompt, return_tensors="pt")[0]
-
-                training_input_ids_list.append(training_input_ids)
-
-                targets = torch.full_like(training_input_ids, self.ignore_id)
-                sample_types = torch.full_like(training_input_ids, self.ignore_id)
-                if message["role"] == "<|Assistant|>":
-                    targets[self.generation_prompt_length+1:] = training_input_ids[self.generation_prompt_length+1:].clone()
-                targets_list.append(targets)
-                sample_types_list.append(sample_types)
-
-            targets = torch.cat(targets_list)
-            sample_types = torch.cat(sample_types_list)
-            training_input_ids = torch.cat(training_input_ids_list)
-
-
-            # truncation
-            import torch.nn.functional as F
-            def pad_to_max_length(tensor, max_length, pad_value=-100):
-                """
-                将张量填充到指定长度，前部填充 pad_value。
-                """
-
-                
-                current_length = tensor.size(0)  # 获取当前长度
-                if current_length < max_length:
-                    # 计算需要填充的长度
-                    pad_length = max_length - current_length
-                    # 在前部填充 pad_value
-                    padded_tensor = F.pad(tensor, (pad_length, 0), value=pad_value)
-                else:
-                    # 如果长度已经足够，直接截断
-                    
-                    padded_tensor = tensor[:max_length]
-                return padded_tensor
-
-            # 对 targets, sample_types, training_input_ids 进行填充
-            max_length = self.tokenizer_model_max_length
-
-
-            if self.use_tokenizer_pad:
-                targets = pad_to_max_length(targets, max_length, pad_value=self.ignore_id)
-                sample_types = pad_to_max_length(sample_types, max_length, pad_value=self.ignore_id)
-                training_input_ids = pad_to_max_length(training_input_ids, max_length, pad_value=self.ignore_id)
-            else:
-                targets =  targets[:self.tokenizer_model_max_length]
-                sample_types = sample_types[:self.tokenizer_model_max_length]
-                training_input_ids = training_input_ids[:self.tokenizer_model_max_length]
-
-            
-            
-
-            
-            """if self.tokenizer_model_max_length is not None:
-                # import ipdb; ipdb.set_trace()
-                print(f'inputs ids length:{len(targets)} ==== {self.tokenizer_model_max_length}!')
-                if len(targets) > self.tokenizer_model_max_length:
-                    print(f'inputs ids length:{len(targets)} is longer than {self.tokenizer_model_max_length}!')
-                targets =  targets[:self.tokenizer_model_max_length]
-                sample_types = sample_types[:self.tokenizer_model_max_length]
-                training_input_ids = training_input_ids[:self.tokenizer_model_max_length]"""
-
-
-
-            types, counts = torch.unique(sample_types[sample_types > -1], return_counts=True)
-
-            if len(types) > 0:
-                target_num_samples = counts.amin()
-
-                for type_id, type_count in zip(types, counts):
-                    if type_count > target_num_samples:
-                        indices = torch.nonzero(sample_types == type_id)[:, 0]
-                        random_selector = torch.randperm(indices.size(0))[:-target_num_samples]
-                        targets[indices[random_selector]] = self.ignore_id
-                        sample_types[indices[random_selector]] = -1
- 
-
-
-            input_ids = training_input_ids
-
-            # add image tokens to the input_ids
-            image_token_mask: torch.BoolTensor = input_ids == self.image_id
-            image_indices = image_token_mask.nonzero()
-            input_ids, num_image_tokens, targets = self.add_image_token(
-                image_indices=image_indices,
-                input_ids=input_ids,
-                targets=targets,
-            )
-
-        else:
-            targets = None
-
-            # add image tokens to the input_ids
-            image_token_mask: torch.BoolTensor = input_ids == self.image_id
-            image_indices = image_token_mask.nonzero()
-            input_ids, num_image_tokens, targets = self.add_image_token(
-                image_indices=image_indices,
-                input_ids=input_ids,
-                targets=targets,
-            )
+        # add image tokens to the input_ids
+        image_token_mask: torch.BoolTensor = input_ids == self.image_id
+        image_indices = image_token_mask.nonzero()
+        input_ids, num_image_tokens = self.add_image_token(
+            image_indices=image_indices,
+            input_ids=input_ids,
+        )
 
         # load images
         images_outputs = self.image_processor(images, return_tensors="pt")
@@ -498,7 +315,6 @@ class VLChatProcessor(ProcessorMixin):
             input_ids=input_ids,
             pixel_values=images_outputs.pixel_values,
             num_image_tokens=num_image_tokens,
-            labels=targets,
         )
 
         return prepare
@@ -510,8 +326,6 @@ class VLChatProcessor(ProcessorMixin):
         conversations: List[Dict[str, str]] = None,
         images: List[Image] = None,
         force_batchify: bool = True,
-        is_training: bool = False,
-        modal = None,
         **kwargs,
     ):
         """
@@ -532,7 +346,7 @@ class VLChatProcessor(ProcessorMixin):
         """
 
         prepare = self.process_one(
-            prompt=prompt, conversations=conversations, images=images, is_training=is_training, modal=modal
+            prompt=prompt, conversations=conversations, images=images
         )
 
         if force_batchify:
@@ -563,15 +377,10 @@ class VLChatProcessor(ProcessorMixin):
 
         input_token_max_len = max(seq_lens)
         max_n_images = max(1, max(n_images))
-        #max_n_images = max(n_images)
 
         batched_input_ids = torch.full(
             (batch_size, input_token_max_len), self.pad_id
         ).long()  # FIXME
-        batched_labels_ids = torch.full(
-            (batch_size, input_token_max_len), self.pad_id
-        ).long()  # FIXME
-
         batched_attention_mask = torch.zeros((batch_size, input_token_max_len)).long()
         batched_pixel_values = torch.zeros(
             (batch_size, max_n_images, *self.image_processor.default_shape)
@@ -591,25 +400,14 @@ class VLChatProcessor(ProcessorMixin):
             batched_images_seq_mask[i, -seq_len:] = input_ids == self.image_id
 
             if n_image > 0:
-                #print(batched_pixel_values.shape,prepare.pixel_values.shape,n_image)
                 batched_pixel_values[i, :n_image] = prepare.pixel_values
                 for j, n_image_tokens in enumerate(prepare.num_image_tokens):
                     batched_images_emb_mask[i, j, :n_image_tokens] = True
 
             sft_format.append(prepare.sft_format)
 
-            if prepare.labels is not None:
-                # import ipdb; ipdb.set_trace()
-                labels = prepare.labels
-                batched_labels_ids[i, -seq_len:] = torch.LongTensor(labels)
-
-        # No need to calculate the loss of pad tokens
-        batched_labels_ids = torch.where(batched_labels_ids == self.pad_id, -100, batched_labels_ids) # 100015 
-
-        
         batched_prepares = BatchedVLChatProcessorOutput(
             input_ids=batched_input_ids,
-            labels=batched_labels_ids,
             attention_mask=batched_attention_mask,
             pixel_values=batched_pixel_values,
             images_seq_mask=batched_images_seq_mask,

@@ -31,19 +31,30 @@ vl_chat_processor: VLChatProcessor = VLChatProcessor.from_pretrained(model_path)
 tokenizer = vl_chat_processor.tokenizer
 
 
-model_path = "/storage/zhubin/Janus-zb/checkpoints/stage1_1scale_384_sdpa_ft/videollama3_qwen2.5_2b/stage_1/checkpoint-1000"
+# model_path = "/storage/zhubin/Janus-zb/checkpoints/stage1_1scale_192_sdpa_ft/videollama3_qwen2.5_2b/stage_1/checkpoint-10000"
+model_path = "/storage/zhubin/Janus-zb/checkpoints/stage1_1scale_192_sdpa_ft_attnmask/videollama3_qwen2.5_2b/stage_1/checkpoint-1000"
 vl_gpt: MultiModalityCausalLM = AutoModelForCausalLM.from_pretrained(
     model_path, trust_remote_code=True
 )
 vl_gpt = vl_gpt.to(torch.bfloat16).cuda().eval()
 
+# conversation = [
+#     {
+#         "role": "User",
+#         "content": "A close-up high-contrast photo of Sydney Opera House sitting next to Eiffel tower, under a blue night sky of roiling energy, exploding yellow stars, and radiating swirls of blue.",
+#     },
+#     {"role": "Assistant", "content": ""},
+# ]
+
+
 conversation = [
     {
         "role": "User",
-        "content": "A close-up high-contrast photo of Sydney Opera House sitting next to Eiffel tower, under a blue night sky of roiling energy, exploding yellow stars, and radiating swirls of blue.",
+        "content": "A man.",
     },
     {"role": "Assistant", "content": ""},
 ]
+
 
 sft_format = vl_chat_processor.apply_sft_template_for_multi_turn_prompts(
     conversations=conversation,
@@ -61,8 +72,8 @@ def generate(
     temperature: float = 1,
     parallel_size: int = 16,
     cfg_weight: float = 5,
-    image_token_num_per_image: int = 576,
-    img_size: int = 384,
+    image_token_num_per_image: int = 144,
+    img_size: int = 192,
     patch_size: int = 16,
 ):
     input_ids = vl_chat_processor.tokenizer.encode(prompt)
@@ -105,9 +116,9 @@ def generate(
     visual_img = np.zeros((parallel_size, img_size, img_size, 3), dtype=np.uint8)
     visual_img[:, :, :] = dec
 
-    os.makedirs('generated_samples', exist_ok=True)
+    os.makedirs('useless/generated_samples_192_attnmask', exist_ok=True)
     for i in range(parallel_size):
-        save_path = os.path.join('generated_samples', "img_{}.jpg".format(i))
+        save_path = os.path.join('useless/generated_samples_192_attnmask', "img_{}_192.jpg".format(i))
         PIL.Image.fromarray(visual_img[i]).save(save_path)
 
 
@@ -125,11 +136,11 @@ cd  /storage/zhubin/Janus-zb
 source /storage/miniconda3/etc/profile.d/conda.sh
 conda activate janus_pro
 
-python /storage/zhubin/Janus-zb/generation_inference.py
+python /storage/zhubin/Janus-zb/generation_inference_192.py
 
 
 
-tensorboard --logdir=/storage/jp/Janus/checkpoints/singlescale_arloss_unidata_flashattn_0312_2245/videollama3_qwen2.5_2b/stage_1/runs/Mar12_23-44-00_node037
+tensorboard --logdir=/storage/zhubin/Janus-zb/checkpoints
 
 
 """

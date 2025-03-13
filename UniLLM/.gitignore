@@ -420,8 +420,6 @@ tags
 .github
 generated_samples/
 
-
-
 eval_data/
 
 Janus-Pro-1B
@@ -432,11 +430,3 @@ work_dirs*
 uesless
 generated_samples_0
 tmp.py
-tmp2.py
-Lumen5
-1.py
-*useless*
-reconstructed_samples
-logs
-checkpoints
-*__pycache__*

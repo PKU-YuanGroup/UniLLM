@@ -44,20 +44,11 @@ from transformers.utils import (
     add_code_sample_docstrings,
     add_start_docstrings,
     add_start_docstrings_to_model_forward,
-    is_torch_flex_attn_available,
     logging,
     replace_return_docstrings,
 )
 from transformers.utils.deprecation import deprecate_kwarg
 from .configuration_llama import LlamaConfig
-
-
-if is_torch_flex_attn_available():
-    from torch.nn.attention.flex_attention import BlockMask
-    # from transformers.integrations.flex_attention import make_flex_block_causal_mask
-
-# ADD
-from transformers.loss.loss_utils import ForMaskedLMLoss
 
 
 logger = logging.get_logger(__name__)
@@ -138,7 +129,7 @@ class LlamaRotaryEmbedding(nn.Module):
         device_type = x.device.type
         device_type = device_type if isinstance(device_type, str) and device_type != "mps" else "cpu"
         with torch.autocast(device_type=device_type, enabled=False):
-            freqs = (inv_freq_expanded.float().to(x.device) @ position_ids_expanded.float()).transpose(1, 2)
+            freqs = (inv_freq_expanded.float() @ position_ids_expanded.float()).transpose(1, 2)
             emb = torch.cat((freqs, freqs), dim=-1)
             cos = emb.cos()
             sin = emb.sin()
@@ -298,8 +289,6 @@ class LlamaAttention(nn.Module):
             else:
                 attention_interface = ALL_ATTENTION_FUNCTIONS[self.config._attn_implementation]
 
-
-        # import ipdb; ipdb.set_trace()
         attn_output, attn_weights = attention_interface(
             self,
             query_states,
@@ -572,7 +561,6 @@ class LlamaModel(LlamaPreTrainedModel):
         if position_ids is None:
             position_ids = cache_position.unsqueeze(0)
 
-        # import ipdb; ipdb.set_trace()
         causal_mask = self._update_causal_mask(
             attention_mask, inputs_embeds, cache_position, past_key_values, output_attentions
         )
@@ -646,11 +634,6 @@ class LlamaModel(LlamaPreTrainedModel):
             if attention_mask is not None and (attention_mask == 0.0).any():
                 return attention_mask
             return None
-        # if self.config._attn_implementation == "flex_attention":
-        #     if isinstance(attention_mask, torch.Tensor):
-        #         attention_mask = make_flex_block_causal_mask(attention_mask)
-        #     if isinstance(attention_mask, BlockMask):
-        #         return attention_mask
 
         # For SDPA, when possible, we will rely on its `is_causal` argument instead of its `attn_mask` argument, in
         # order to dispatch on Flash Attention 2. This feature is not compatible with static cache, as SDPA will fail
@@ -731,7 +714,7 @@ class LlamaModel(LlamaPreTrainedModel):
             dtype (`torch.dtype`):
                 The dtype to use for the 4D attention mask.
             device (`torch.device`):
-                The device to place the 4D attention mask on.
+                The device to plcae the 4D attention mask on.
             cache_position (`torch.Tensor`):
                 Indices depicting the position of the input sequence tokens in the sequence.
             batch_size (`torch.Tensor`):
@@ -815,23 +798,13 @@ class LlamaForCausalLM(LlamaPreTrainedModel, GenerationMixin):
         return_dict: Optional[bool] = None,
         cache_position: Optional[torch.LongTensor] = None,
         logits_to_keep: Union[int, torch.Tensor] = 0,
-    
-        # ADD
         image_gen: Optional[bool] = None,
         vocab_size: Union[int, torch.Tensor] = 0,
         gen_head: Optional[bool] = None,
-        ar_token_nums: Union[int, torch.Tensor] = 0,
-        text_token_nums: Union[int, torch.Tensor] = 0,
-        ar_with_non_ar: Optional[bool] = None,
-        only_compute_ar_loss : Optional[bool] = False,
-        is_causal : Optional[bool] = True,
-
-
         **kwargs: Unpack[KwargsForCausalLM],
-
-
     ) -> Union[Tuple, CausalLMOutputWithPast]:
         r"""
+        Args:
             labels (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
                 Labels for computing the masked language modeling loss. Indices should either be in `[0, ...,
                 config.vocab_size]` or -100 (see `input_ids` docstring). Tokens with indices set to `-100` are ignored
@@ -862,6 +835,8 @@ class LlamaForCausalLM(LlamaPreTrainedModel, GenerationMixin):
         >>> tokenizer.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
         "Hey, are you conscious? Can you talk to me?\nI'm not conscious, but I can talk to you."
         ```"""
+
+        
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
@@ -880,48 +855,21 @@ class LlamaForCausalLM(LlamaPreTrainedModel, GenerationMixin):
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
             cache_position=cache_position,
-            
-            #ADD
-            is_causal = is_causal,
-
             **kwargs,
         )
 
         hidden_states = outputs[0]
-
         # Only compute necessary logits, and do not upcast them to float if we are not computing the loss
         slice_indices = slice(-logits_to_keep, None) if isinstance(logits_to_keep, int) else logits_to_keep
-
-        # ADD
         if image_gen:
-            # 图像生成没有进行slice切分，是通过ar_token_nums来分离ar and non-ar。
             logits = gen_head(hidden_states[:, slice_indices, :])
         else:
             logits = self.lm_head(hidden_states[:, slice_indices, :])
- 
 
         loss = None
+        # import ipdb; ipdb.set_trace()
         if labels is not None:
-
-            if ar_with_non_ar and image_gen:
-                # 自回归图像 + 非自回归图像
-                if not only_compute_ar_loss:
-                    # 计算第一个尺度的ar loss + 后续尺度的 mask loss。
-                    loss_ar =  self.loss_function(logits=logits[:, text_token_nums-1:ar_token_nums], labels=labels[:, text_token_nums-1:ar_token_nums], vocab_size=self.config.vocab_size if not vocab_size else vocab_size, **kwargs)
-                    loss_non_ar = ForMaskedLMLoss(logits=logits[:, ar_token_nums:].contiguous(), labels=labels[:, ar_token_nums:].contiguous(), vocab_size=self.config.vocab_size if not vocab_size else vocab_size, **kwargs)
-                    loss = loss_ar + loss_non_ar
-                    print(f'loss {loss}, loss_non_ar {loss_non_ar}')
-                else:
-                    # 只计算第一个尺度的ar loss。
-                    loss  =  self.loss_function(logits=logits[:, text_token_nums-1:ar_token_nums], labels=labels[:, text_token_nums-1:ar_token_nums], vocab_size=self.config.vocab_size if not vocab_size else vocab_size, **kwargs)
-            elif not ar_with_non_ar and image_gen:
-                # 自回归图像
-                loss  =  self.loss_function(logits=logits[:, text_token_nums-1:ar_token_nums], labels=labels[:, text_token_nums-1:ar_token_nums], vocab_size=self.config.vocab_size if not vocab_size else vocab_size, **kwargs)
-                
-            else:
-                # 文本
-                loss = self.loss_function(logits=logits, labels=labels, vocab_size=self.config.vocab_size if not vocab_size else vocab_size, **kwargs)
-
+            loss = self.loss_function(logits=logits, labels=labels, vocab_size=self.config.vocab_size if not vocab_size else vocab_size, **kwargs)
         if not return_dict:
             output = (logits,) + outputs[1:]
             return (loss,) + output if loss is not None else output
