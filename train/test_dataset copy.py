@@ -515,4 +515,5 @@ HF_DATASETS_OFFLINE=1 torchrun \
 --master_addr=$master_addr --master_port=$master_port \
 test_dataset.py  
 
+/storage/miniconda3/envs/janus_pro/lib/python3.10/site-packages/transformers
 """

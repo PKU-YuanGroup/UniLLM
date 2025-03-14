@@ -67,7 +67,7 @@ class TrainingArguments(transformers.TrainingArguments):
     only_compute_ar_loss: bool = field(default=False)
     _attn_implementation_new: str = field(default="flash_attention_2")
     scale_list : str = field(default="12,24")
-
+    visual_token_replace_max_ratio: Optional[float] = None
     # shut auto processing (_remove_unused_columns) of transformers Trainer
     remove_unused_columns: bool = field(default=False)
 

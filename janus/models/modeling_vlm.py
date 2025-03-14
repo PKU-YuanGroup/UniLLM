@@ -40,7 +40,7 @@ from transformers.models.llama.modeling_llama import KwargsForCausalLM
 from torchvision import transforms
 from transformers.cache_utils import Cache
 from torch.nn import functional as F
-
+# /storage/miniconda3/envs/janus_pro/lib/python3.10/site-packages/transformers/modeling_outputs.py
 
 from janus.models.clip_encoder import CLIPVisionTower
 from janus.models.projector import MlpProjector
@@ -257,6 +257,8 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
         self.ar_with_non_ar = config.ar_with_non_ar
         self.is_causal = config.is_causal
         self.only_compute_ar_loss = config.only_compute_ar_loss
+        self.visual_token_replace_max_ratio = config.visual_token_replace_max_ratio
+        print(f'{self.visual_token_replace_max_ratio=}!')
 
     def prepare_inputs_embeds(
         self,
@@ -350,6 +352,35 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
 
         return attention_mask
 
+    def random_replace(self, image_ids, max_ratio):
+        """
+        对 image_ids 的每条序列按 ratio 比例随机替换 ids。
+
+        参数:
+            image_ids: 输入的 ids 张量，shape 为 (b, seq)。
+            ratio: 替换比例，范围 [0, 1]。
+
+        返回:
+            替换后的 ids 张量，shape 为 (b, seq)。
+        """
+        b, seq = image_ids.shape
+
+        # 生成随机比例（若未提供 ratio）
+        ratio = torch.rand(1).item() * max_ratio  # [0, 0.3)
+
+        # 1. 确定需要替换的位置
+        mask = torch.rand(b, seq) < ratio  # 生成随机掩码，shape 为 (b, seq)
+        replace_indices = mask.nonzero(as_tuple=True)  # 获取需要替换的位置
+
+        # 2. 生成新的 ids
+        # 使用 torch.randint 随机生成新的 ids，范围是 [0, self.image_vocab_size - 1]
+        new_ids = torch.randint(0, self.image_vocab_size, (b, seq), device=image_ids.device)
+
+        # 3. 执行替换
+        replaced_ids = image_ids.clone()  # 复制原始 ids
+        replaced_ids[replace_indices] = new_ids[replace_indices]  # 替换选定的位置
+
+        return replaced_ids
     def forward(
         self,
         input_ids: torch.LongTensor = None,
@@ -417,7 +448,7 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
             text_token_nums = input_ids.size(1)
             ar_token_nums =  text_token_nums + image_token_nums_first_stage  
 
-            # 获取图像和文本的embedding
+            # 获取图像和文本的embedding用于自回归
             img_embeds = self.prepare_gen_img_embeds(images_ids) # torch.Size([32, 36, 2048])
             inputs_embeds = self.language_model.get_input_embeddings()(input_ids)
 
@@ -431,20 +462,31 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
             kwargs["num_items_in_batch"] = None # kwargs["num_items_in_batch"] * image_token_nums
   
             for scale_idx in range(2, len(self.scale_list)+1): #
+
+                # 随机替换token
+                images_ids_replaced = self.random_replace(images_ids, self.visual_token_replace_max_ratio)
+                # 获取图像tokens被随机替换后embedding用于下一个尺度的输入
+                img_embeds_replaced = self.prepare_gen_img_embeds(images_ids_replaced) # torch.Size([32, 36, 2048])
+
+
                 # 训练中用前一个尺度的gt-embedding插值得到当前尺度的输入
-                img_embeds_prev_gt = img_embeds  # （b, n, c）
-                (b, _, c) = img_embeds_prev_gt.shape  
-                img_embeds_prev_gt = img_embeds_prev_gt.view(b, self.scale_list[scale_idx-2], self.scale_list[scale_idx-2], c).permute(0, 3, 1, 2) # (bs, 2048, 6, 6)    
-                img_embeds_curr_stage = F.interpolate(img_embeds_prev_gt, size=(self.scale_list[scale_idx-1], self.scale_list[scale_idx-1]), mode='bilinear', align_corners=False) # (bs, 2048, 12, 12)
+                img_embeds_prev_embeds_replaced = img_embeds_replaced  # （b, n, c）
+                (b, _, c) = img_embeds_prev_embeds_replaced.shape  
+                img_embeds_prev_embeds_replaced = img_embeds_prev_embeds_replaced.view(b, self.scale_list[scale_idx-2], self.scale_list[scale_idx-2], c).permute(0, 3, 1, 2) # (bs, 2048, 6, 6)    
+                img_embeds_curr_stage = F.interpolate(img_embeds_prev_embeds_replaced, size=(self.scale_list[scale_idx-1], self.scale_list[scale_idx-1]), mode='bilinear', align_corners=False) # (bs, 2048, 12, 12)
                 img_embeds_curr_stage = img_embeds_curr_stage.permute(0, 2, 3, 1).view(b, self.scale_list[scale_idx-1]**2, c) # (bs, 144,  2048)
                 # 插值后的拼接在输入后面
                 img_embeds_list.append(img_embeds_curr_stage) # (b, q**2,  2048)
+
 
                 # 当前阶段的gt真值
                 images_curr_stage = self.resize_transform_list[scale_idx-1](ori_images)
                 z_q, (vq_loss, commit_loss, entropy_loss), (perplexity, min_encodings, min_encoding_indices) = self.gen_vision_model.encode(images_curr_stage)
                 images_ids_curr_stage = min_encoding_indices.view(b * n, -1)
                 labels_images_ids_list.append(images_ids_curr_stage) # （b, q**2)
+
+                # 下一个阶段的images_ids
+                images_ids = images_ids_curr_stage
                 
             # 所有的输入embeds拼一起
             img_embeds = torch.cat(img_embeds_list, dim=1)

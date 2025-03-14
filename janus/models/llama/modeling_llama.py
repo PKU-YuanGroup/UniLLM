@@ -910,7 +910,7 @@ class LlamaForCausalLM(LlamaPreTrainedModel, GenerationMixin):
                     loss_ar =  self.loss_function(logits=logits[:, text_token_nums-1:ar_token_nums], labels=labels[:, text_token_nums-1:ar_token_nums], vocab_size=self.config.vocab_size if not vocab_size else vocab_size, **kwargs)
                     loss_non_ar = ForMaskedLMLoss(logits=logits[:, ar_token_nums:].contiguous(), labels=labels[:, ar_token_nums:].contiguous(), vocab_size=self.config.vocab_size if not vocab_size else vocab_size, **kwargs)
                     loss = loss_ar + loss_non_ar
-                    print(f'loss {loss}, loss_non_ar {loss_non_ar}')
+                    # print(f'loss {loss}, loss_non_ar {loss_non_ar}')
                 else:
                     # 只计算第一个尺度的ar loss。
                     loss  =  self.loss_function(logits=logits[:, text_token_nums-1:ar_token_nums], labels=labels[:, text_token_nums-1:ar_token_nums], vocab_size=self.config.vocab_size if not vocab_size else vocab_size, **kwargs)

@@ -32,7 +32,9 @@ tokenizer = vl_chat_processor.tokenizer
 
 
 # model_path = "/storage/zhubin/Janus-zb/checkpoints/stage1_1scale_192_sdpa_ft/videollama3_qwen2.5_2b/stage_1/checkpoint-10000"
-model_path = "/storage/zhubin/Janus-zb/checkpoints/stage1_1scale_192_sdpa_ft_attnmask/videollama3_qwen2.5_2b/stage_1/checkpoint-1000"
+# model_path = "/storage/zhubin/Janus-zb/checkpoints/stage1_1scale_192_sdpa_ft_attnmask/videollama3_qwen2.5_2b/stage_1/checkpoint-1000"
+model_path = "/storage/zhubin/Janus-zb/checkpoints/stage1_2scale_192_384_sdpa_ft_attnmask/videollama3_qwen2.5_2b/stage_1/checkpoint-1000"
+
 vl_gpt: MultiModalityCausalLM = AutoModelForCausalLM.from_pretrained(
     model_path, trust_remote_code=True
 )
@@ -116,9 +118,9 @@ def generate(
     visual_img = np.zeros((parallel_size, img_size, img_size, 3), dtype=np.uint8)
     visual_img[:, :, :] = dec
 
-    os.makedirs('useless/generated_samples_192_attnmask', exist_ok=True)
+    os.makedirs('useless/generated_samples_stage1_2scale_192_384_sdpa_ft_attnmask', exist_ok=True)
     for i in range(parallel_size):
-        save_path = os.path.join('useless/generated_samples_192_attnmask', "img_{}_192.jpg".format(i))
+        save_path = os.path.join('useless/generated_samples_stage1_2scale_192_384_sdpa_ft_attnmask', "img_{}_192.jpg".format(i))
         PIL.Image.fromarray(visual_img[i]).save(save_path)
 
 

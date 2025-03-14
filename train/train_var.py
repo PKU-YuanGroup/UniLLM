@@ -130,6 +130,7 @@ def train():
     setattr(config, 'is_causal', training_args.is_causal)
     setattr(config, '_attn_implementation_new', training_args._attn_implementation_new)
     setattr(config, 'scale_list', training_args.scale_list)
+    setattr(config, 'visual_token_replace_max_ratio', training_args.visual_token_replace_max_ratio)
     
     #config._attn_implementation 
 
