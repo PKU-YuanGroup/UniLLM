@@ -820,13 +820,6 @@ class LlamaForCausalLM(LlamaPreTrainedModel, GenerationMixin):
         image_gen: Optional[bool] = None,
         vocab_size: Union[int, torch.Tensor] = 0,
         gen_head: Optional[bool] = None,
-        ar_token_nums: Union[int, torch.Tensor] = 0,
-        text_token_nums: Union[int, torch.Tensor] = 0,
-        ar_with_non_ar: Optional[bool] = None,
-        only_compute_ar_loss : Optional[bool] = False,
-        is_causal : Optional[bool] = True,
-
-
         **kwargs: Unpack[KwargsForCausalLM],
 
 
@@ -882,8 +875,6 @@ class LlamaForCausalLM(LlamaPreTrainedModel, GenerationMixin):
             cache_position=cache_position,
             
             #ADD
-            is_causal = is_causal,
-
             **kwargs,
         )
 
@@ -898,29 +889,10 @@ class LlamaForCausalLM(LlamaPreTrainedModel, GenerationMixin):
             logits = gen_head(hidden_states[:, slice_indices, :])
         else:
             logits = self.lm_head(hidden_states[:, slice_indices, :])
- 
 
         loss = None
         if labels is not None:
-
-            if ar_with_non_ar and image_gen:
-                # 自回归图像 + 非自回归图像
-                if not only_compute_ar_loss:
-                    # 计算第一个尺度的ar loss + 后续尺度的 mask loss。
-                    loss_ar =  self.loss_function(logits=logits[:, text_token_nums-1:ar_token_nums], labels=labels[:, text_token_nums-1:ar_token_nums], vocab_size=self.config.vocab_size if not vocab_size else vocab_size, **kwargs)
-                    loss_non_ar = ForMaskedLMLoss(logits=logits[:, ar_token_nums:].contiguous(), labels=labels[:, ar_token_nums:].contiguous(), vocab_size=self.config.vocab_size if not vocab_size else vocab_size, **kwargs)
-                    loss = loss_ar + loss_non_ar
-                    # print(f'loss {loss}, loss_non_ar {loss_non_ar}')
-                else:
-                    # 只计算第一个尺度的ar loss。
-                    loss  =  self.loss_function(logits=logits[:, text_token_nums-1:ar_token_nums], labels=labels[:, text_token_nums-1:ar_token_nums], vocab_size=self.config.vocab_size if not vocab_size else vocab_size, **kwargs)
-            elif not ar_with_non_ar and image_gen:
-                # 自回归图像
-                loss  =  self.loss_function(logits=logits[:, text_token_nums-1:ar_token_nums], labels=labels[:, text_token_nums-1:ar_token_nums], vocab_size=self.config.vocab_size if not vocab_size else vocab_size, **kwargs)
-                
-            else:
-                # 文本
-                loss = self.loss_function(logits=logits, labels=labels, vocab_size=self.config.vocab_size if not vocab_size else vocab_size, **kwargs)
+            loss = self.loss_function(logits=logits, labels=labels, vocab_size=self.config.vocab_size if not vocab_size else vocab_size, **kwargs)
 
         if not return_dict:
             output = (logits,) + outputs[1:]

@@ -104,9 +104,9 @@ def generate(
     visual_img = np.zeros((parallel_size, img_size, img_size, 3), dtype=np.uint8)
     visual_img[:, :, :] = dec
 
-    os.makedirs('generated_samples', exist_ok=True)
+    os.makedirs('useless/test', exist_ok=True)
     for i in range(parallel_size):
-        save_path = os.path.join('generated_samples', "img_{}.jpg".format(i))
+        save_path = os.path.join('useless/test', "img_{}.jpg".format(i))
         PIL.Image.fromarray(visual_img[i]).save(save_path)
 
 
@@ -128,7 +128,9 @@ python /storage/zhubin/Janus-zb/generation_inference.py
 
 
 
-tensorboard --logdir=/storage/jp/Janus/checkpoints/singlescale_arloss_unidata_flashattn_0312_2245/videollama3_qwen2.5_2b/stage_1/runs/Mar12_23-44-00_node037
+tensorboard --logdir=/storage/zhubin/Janus-zb/checkpoints/stage1_2scale_384_384_768_sdpa_ft_attnmask_random_replace_0.5_repeat_maskarimage
+
+tensorboard --logdir=/storage/zhubin/Janus-zb/checkpoints/stage1_3scale_1-2-4_v2/videollama3_qwen2.5_2b/stage_1/checkpoint-4000
 
 
 """

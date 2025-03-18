@@ -440,3 +440,4 @@ reconstructed_samples
 logs
 checkpoints
 *__pycache__*
+*tmp*.py
