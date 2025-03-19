@@ -441,3 +441,5 @@ logs
 checkpoints
 *__pycache__*
 *tmp*.py
+split.bash
+rename.py
