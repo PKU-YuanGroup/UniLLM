@@ -19,6 +19,7 @@
 
 from .image_processing_vlm import VLMImageProcessor
 from .modeling_vlm import MultiModalityCausalLM
+from .modeling_vlm_SepVL import  MultiModalityCausalLM_SepVL
 from .processing_vlm import VLChatProcessor
 # from .llama import *
 
@@ -26,4 +27,5 @@ __all__ = [
     "VLMImageProcessor",
     "VLChatProcessor",
     "MultiModalityCausalLM",
+    "MultiModalityCausalLM_SepVL"
 ]

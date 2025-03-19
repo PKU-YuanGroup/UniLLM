@@ -9,6 +9,7 @@ for node in nodes:
     result = subprocess.run(["ssh", f"{node}", f"pkill -f /train.py"], capture_output=True, text=True)
     result = subprocess.run(["ssh", f"{node}", f"pkill -f /train_var.py"], capture_output=True, text=True)
     result = subprocess.run(["ssh", f"{node}", f"pkill -f  v2.py"], capture_output=True, text=True)
+    result = subprocess.run(["ssh", f"{node}", f"pkill -f  SepVL.py"], capture_output=True, text=True)
 
 
 """

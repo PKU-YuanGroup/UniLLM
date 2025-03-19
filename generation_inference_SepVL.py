@@ -18,9 +18,9 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 import torch
-from transformers import AutoModelForCausalLM
+# from transformers import AutoModelForCausalLM
 
-from janus.models import MultiModalityCausalLM, VLChatProcessor
+from janus.models import MultiModalityCausalLM_SepVL, VLChatProcessor
 import numpy as np
 import os
 import PIL.Image
@@ -31,8 +31,8 @@ vl_chat_processor: VLChatProcessor = VLChatProcessor.from_pretrained(model_path)
 tokenizer = vl_chat_processor.tokenizer
 
 
-model_path = "/storage/zhubin/Janus-MoE/checkpoints/stage1_1scale_384_flash_ft_SepVL/videollama3_qwen2.5_2b/stage_1/checkpoint-3000"
-vl_gpt: MultiModalityCausalLM = AutoModelForCausalLM.from_pretrained(
+model_path = "/storage/zhubin/Janus-MoE/checkpoints/stage1_1scale_384_flash_ft_SepVL/videollama3_qwen2.5_2b/stage_1/checkpoint-33000"
+vl_gpt  = MultiModalityCausalLM_SepVL.from_pretrained(
     model_path, trust_remote_code=True
 )
 vl_gpt = vl_gpt.to(torch.bfloat16).cuda().eval()
@@ -55,7 +55,7 @@ prompt = sft_format + vl_chat_processor.image_start_tag
 
 @torch.inference_mode()
 def generate(
-    mmgpt: MultiModalityCausalLM,
+    mmgpt: MultiModalityCausalLM_SepVL,
     vl_chat_processor: VLChatProcessor,
     prompt: str,
     temperature: float = 1,
@@ -78,7 +78,13 @@ def generate(
     generated_tokens = torch.zeros((parallel_size, image_token_num_per_image), dtype=torch.int).cuda()
 
     for i in range(image_token_num_per_image):
-        outputs = mmgpt.language_model.model(inputs_embeds=inputs_embeds, use_cache=True, past_key_values=outputs.past_key_values if i != 0 else None)
+        
+        if i == 0:
+            outputs = mmgpt.language_model.model(inputs_embeds=inputs_embeds, use_cache=True, past_key_values=outputs.past_key_values if i != 0 else None, image_token_nums=1)
+        else:
+            outputs = mmgpt.language_model.model(inputs_embeds=inputs_embeds, use_cache=True, past_key_values=outputs.past_key_values if i != 0 else None, image_token_nums=1)
+        
+        
         hidden_states = outputs.last_hidden_state
         
         logits = mmgpt.gen_head(hidden_states[:, -1, :])
@@ -124,12 +130,13 @@ cd  /storage/zhubin/Janus-MoE/
 source /storage/miniconda3/etc/profile.d/conda.sh
 conda activate janus_pro
 
-python generation_inference.py 
+python generation_inference_SepVL.py
 
 
 
 tensorboard --logdir=/storage/zhubin/Janus-zb/checkpoints/stage1_2scale_384_384_768_sdpa_ft_attnmask_random_replace_0.5_repeat_maskarimage
 
-tensorboard --logdir=/storage/zhubin/Janus-MoE/checkpoints/ 
+tensorboard --logdir=/storage/zhubin/Janus-MoE/checkpoints
+
 
 """

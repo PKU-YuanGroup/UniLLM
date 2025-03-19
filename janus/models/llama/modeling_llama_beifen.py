@@ -253,20 +253,6 @@ class LlamaAttention(nn.Module):
         
 
         # text
-        """self.q_proj = nn.Linear(
-            config.hidden_size, config.num_attention_heads * self.head_dim, bias=config.attention_bias
-        )
-        self.k_proj  = nn.Linear(
-            config.hidden_size, config.num_key_value_heads * self.head_dim, bias=config.attention_bias
-        )
-        self.v_proj  = nn.Linear(
-            config.hidden_size, config.num_key_value_heads * self.head_dim, bias=config.attention_bias
-        )
-        self.o_proj  = nn.Linear(
-            config.num_attention_heads * self.head_dim, config.hidden_size, bias=config.attention_bias
-        )"""
-
-        # text
         self.q_proj_text = nn.Linear(
             config.hidden_size, config.num_attention_heads * self.head_dim, bias=config.attention_bias
         )
@@ -293,7 +279,9 @@ class LlamaAttention(nn.Module):
         self.o_proj_vision = nn.Linear(
             config.num_attention_heads * self.head_dim, config.hidden_size, bias=config.attention_bias
         )
- 
+
+        
+
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -315,47 +303,32 @@ class LlamaAttention(nn.Module):
         hidden_shape_text = (*input_shape_text, -1, self.head_dim)
 
         input_shape_vision = hidden_states[:, -image_token_nums:].shape[:-1]
-        hidden_shape_vision = (*input_shape_vision, -1, self.head_dim) 
+        hidden_shape_vision = (*input_shape_vision, -1, self.head_dim)
 
 
         # import ipdb; ipdb.set_trace()
         # Text
         # print(image_token_nums, hidden_states.shape)
         
-
-        """query_states  = self.q_proj(hidden_states ).view(hidden_shape ).transpose(1, 2)
-        key_states  =   self.k_proj(hidden_states ).view(hidden_shape ).transpose(1, 2)
-        value_states  = self.v_proj(hidden_states ).view(hidden_shape ).transpose(1, 2)"""
-
-
         # Vision
-        # import ipdb; ipdb.set_trace()
-        if image_token_nums>0:
-            query_states_vision = self.q_proj_vision(hidden_states[:, -image_token_nums:]).view(hidden_shape_vision).transpose(1, 2)
-            key_states_vision =   self.k_proj_vision(hidden_states[:, -image_token_nums:]).view(hidden_shape_vision).transpose(1, 2)
-            value_states_vision = self.v_proj_vision(hidden_states[:, -image_token_nums:]).view(hidden_shape_vision).transpose(1, 2)
+        query_states_vision = self.q_proj_vision(hidden_states[:, -image_token_nums:]).view(hidden_shape_vision).transpose(1, 2)
+        key_states_vision =   self.k_proj_vision(hidden_states[:, -image_token_nums:]).view(hidden_shape_vision).transpose(1, 2)
+        value_states_vision = self.v_proj_vision(hidden_states[:, -image_token_nums:]).view(hidden_shape_vision).transpose(1, 2)
 
-            # 推理视觉token
-            if  hidden_states.shape[-2] == 1:
-                # inference
-                query_states =  query_states_vision
-                key_states = key_states_vision
-                value_states = value_states_vision
-            # 视觉文本训练
-            else:
-                query_states_text = self.q_proj_text(hidden_states[:, :-image_token_nums]).view(hidden_shape_text).transpose(1, 2)
-                key_states_text =   self.k_proj_text(hidden_states[:, :-image_token_nums]).view(hidden_shape_text).transpose(1, 2)
-                value_states_text = self.v_proj_text(hidden_states[:, :-image_token_nums]).view(hidden_shape_text).transpose(1, 2)
-
-                # cat text and vision
-                query_states = torch.cat([query_states_text, query_states_vision], dim=-2)
-                key_states = torch.cat([key_states_text, key_states_vision], dim=-2)
-                value_states = torch.cat([value_states_text, value_states_vision], dim=-2)
+        if  hidden_states.shape[-2] == 1:
+            # inference
+            query_states =  query_states_vision
+            key_states = key_states_vision
+            value_states = value_states_vision
         else:
-            # 训练文本token和推理文本token都可以
-            query_states = self.q_proj_text(hidden_states).view(hidden_shape).transpose(1, 2)
-            key_states =   self.k_proj_text(hidden_states).view(hidden_shape).transpose(1, 2)
-            value_states = self.v_proj_text(hidden_states).view(hidden_shape).transpose(1, 2)
+            query_states_text = self.q_proj_text(hidden_states[:, :-image_token_nums]).view(hidden_shape_text).transpose(1, 2)
+            key_states_text =   self.k_proj_text(hidden_states[:, :-image_token_nums]).view(hidden_shape_text).transpose(1, 2)
+            value_states_text = self.v_proj_text(hidden_states[:, :-image_token_nums]).view(hidden_shape_text).transpose(1, 2)
+
+            # cat text and vision
+            query_states = torch.cat([query_states_text, query_states_vision], dim=-2)
+            key_states = torch.cat([key_states_text, key_states_vision], dim=-2)
+            value_states = torch.cat([value_states_text, value_states_vision], dim=-2)
 
         cos, sin = position_embeddings
         query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)
@@ -390,18 +363,13 @@ class LlamaAttention(nn.Module):
 
         attn_output = attn_output.reshape(*input_shape, -1).contiguous()
 
-        # attn_output  = self.o_proj(attn_output)
-
-        if image_token_nums>0:
-            if  hidden_states.shape[-2] == 1:
-                attn_output_vision = self.o_proj_vision(attn_output[:, -image_token_nums: ])
-                attn_output = attn_output_vision
-            else:
-                attn_output_text = self.o_proj_text(attn_output[:, :-image_token_nums])
-                attn_output_vision = self.o_proj_vision(attn_output[:, -image_token_nums:])
-                attn_output = torch.cat([attn_output_text, attn_output_vision], dim=-2) 
+        if  hidden_states.shape[-2] == 1:
+            attn_output_vision = self.o_proj_vision(attn_output[:, -image_token_nums: ])
+            attn_output = attn_output_vision
         else:
-            attn_output = self.o_proj_text(attn_output)
+            attn_output_text = self.o_proj_text(attn_output[:, :-image_token_nums])
+            attn_output_vision = self.o_proj_vision(attn_output[:, -image_token_nums:])
+            attn_output = torch.cat([attn_output_text, attn_output_vision], dim=-2)
 
         return attn_output, attn_weights
 
@@ -412,18 +380,18 @@ class LlamaDecoderLayer(nn.Module):
         self.hidden_size = config.hidden_size
 
         self.self_attn = LlamaAttention(config=config, layer_idx=layer_idx)
-        # self.mlp = LlamaMLP(config)
-        
+
         self.mlp_text = LlamaMLP(config)
         self.mlp_vision = LlamaMLP(config)
+        
 
-        """self.input_layernorm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        self.post_attention_layernorm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)"""
-        self.input_layernorm_text = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.input_layernorm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.post_attention_layernorm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        """self.input_layernorm_text = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.post_attention_layernorm_text = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 
         self.input_layernorm_vision = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        self.post_attention_layernorm_vision = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.post_attention_layernorm_vision = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)"""
 
 
     def forward(
@@ -445,15 +413,10 @@ class LlamaDecoderLayer(nn.Module):
 
 
         # =========================== FIXME ==========================
-        if image_token_nums>0 and hidden_states.shape[-2] == 1:
-            hidden_states = self.input_layernorm_vision(hidden_states)
-        elif image_token_nums == 0:
-            hidden_states = self.input_layernorm_text(hidden_states)
-        else:
-            hidden_states_text = self.input_layernorm_text(hidden_states[:,      :-image_token_nums ])
-            hidden_states_vision = self.input_layernorm_vision(hidden_states[:,  -image_token_nums: ])
-            hidden_states = torch.cat([hidden_states_text, hidden_states_vision], dim=-2)
-        # hidden_states = self.input_layernorm(hidden_states)
+        """hidden_states_text = self.input_layernorm_text(hidden_states[:,    : -image_token_nums ])
+        hidden_states_vision = self.input_layernorm_vision(hidden_states[:, -image_token_nums : ])
+        hidden_states = torch.cat([hidden_states_text, hidden_states_vision], dim=-2)"""
+        hidden_states = self.input_layernorm(hidden_states)
 
         # Self Attention
         hidden_states, self_attn_weights = self.self_attn(
@@ -475,15 +438,10 @@ class LlamaDecoderLayer(nn.Module):
         residual = hidden_states
 
         # =========================== FIXME ==========================
-        # hidden_states = self.post_attention_layernorm(hidden_states)
-        if image_token_nums>0 and hidden_states.shape[-2] == 1:
-            hidden_states = self.post_attention_layernorm_vision(hidden_states)
-        elif image_token_nums == 0:
-            hidden_states = self.post_attention_layernorm_text(hidden_states)
-        else:
-            hidden_states_text = self.post_attention_layernorm_text(hidden_states[:,    :-image_token_nums ])
-            hidden_states_vision = self.post_attention_layernorm_vision(hidden_states[:, -image_token_nums:])
-            hidden_states = torch.cat([hidden_states_text, hidden_states_vision], dim=-2) 
+        hidden_states = self.post_attention_layernorm(hidden_states)
+        """hidden_states_text = self.post_attention_layernorm_text(hidden_states[:,    :-image_token_nums ])
+        hidden_states_vision = self.post_attention_layernorm_vision(hidden_states[:, -image_token_nums:])
+        hidden_states = torch.cat([hidden_states_text, hidden_states_vision], dim=-2)"""
 
         # hidden_states = self.mlp(hidden_states)
         hidden_states_text = self.mlp_text(hidden_states[:, :-image_token_nums])
@@ -642,10 +600,9 @@ class LlamaModel(LlamaPreTrainedModel):
         self.layers = nn.ModuleList(
             [LlamaDecoderLayer(config, layer_idx) for layer_idx in range(config.num_hidden_layers)]
         )
-        
-        # self.norm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        self.norm_text = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        self.norm_vision = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.norm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        """self.norm_text = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.norm_vision = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)"""
 
         self.rotary_emb = LlamaRotaryEmbedding(config=config)
         self.gradient_checkpointing = False
@@ -764,15 +721,10 @@ class LlamaModel(LlamaPreTrainedModel):
                 all_self_attns += (layer_outputs[1],)
 
         # FIXME 后续需要分开图像和文本
-        # hidden_states = self.norm(hidden_states)
-        if image_token_nums>0 and hidden_states.shape[-2] == 1:
-            hidden_states = self.norm_vision(hidden_states)
-        elif image_token_nums == 0:
-            hidden_states = self.norm_text(hidden_states)
-        else:
-            hidden_states_text = self.norm_text(hidden_states[:, :-image_token_nums])
-            hidden_states_vision = self.norm_vision(hidden_states[:, -image_token_nums:])
-            hidden_states = torch.cat([hidden_states_text, hidden_states_vision], dim=1) 
+        hidden_states = self.norm(hidden_states)
+        """hidden_states_text = self.norm_text(hidden_states[:, :-image_token_nums])
+        hidden_states_vision = self.norm_vision(hidden_states[:, -image_token_nums:])
+        hidden_states = torch.cat([hidden_states_text, hidden_states_vision], dim=1)"""
 
         
         # add hidden states from the last decoder layer
