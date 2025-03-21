@@ -28,13 +28,20 @@ class ImageGenDataset(Dataset):
         with open(jsonfile, 'r', encoding='utf-8') as f:
             return json.load(f)
     def __getitem__(self, idx):
-        idx = random.randint(0, len(self.image_gen_data) - 1)
-        # print(len(self.image_gen_data) - 1, idx)
-        data_item = self.image_gen_data[idx]
 
-        if 'image_gen' in data_item:
-            data_item['image_gen'] = [os.path.join(self.image_gen_rootdir, data_item['image_gen'][0])]
-        return data_item
+        try:
+            idx = random.randint(0, len(self.image_gen_data) - 1)
+            # print(len(self.image_gen_data) - 1, idx)
+            data_item = self.image_gen_data[idx]
+
+            if 'image_gen' in data_item:
+                img_path = os.path.join(self.image_gen_rootdir, data_item['image_gen'][0])
+                assert os.path.exists(img_path), f"image_gen file not found: {img_path}"
+                data_item['image_gen'] = [img_path]
+            return data_item
+        except Exception as e:
+            print(f"Error in ImageGenDataset: {e}")
+            return self.__getitem__(idx+1)
         
         """
         for key, value in *data.items():

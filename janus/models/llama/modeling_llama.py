@@ -311,22 +311,20 @@ class LlamaAttention(nn.Module):
         input_shape = hidden_states.shape[:-1]
         hidden_shape = (*input_shape, -1, self.head_dim)
 
-        input_shape_text = hidden_states[:, :-image_token_nums].shape[:-1]
-        hidden_shape_text = (*input_shape_text, -1, self.head_dim)
+        if image_token_nums>0:
+            input_shape_vision = hidden_states[:, -image_token_nums:].shape[:-1]
+            hidden_shape_vision = (*input_shape_vision, -1, self.head_dim) 
 
-        input_shape_vision = hidden_states[:, -image_token_nums:].shape[:-1]
-        hidden_shape_vision = (*input_shape_vision, -1, self.head_dim) 
-
-
-        # import ipdb; ipdb.set_trace()
-        # Text
-        # print(image_token_nums, hidden_states.shape)
-        
+            if hidden_states.shape[-2] - image_token_nums > 0:
+                input_shape_text = hidden_states[:, :-image_token_nums].shape[:-1]
+                hidden_shape_text = (*input_shape_text, -1, self.head_dim)
+        else:
+            input_shape_text = hidden_states.shape[:-1]
+            hidden_shape_text = (*input_shape_text, -1, self.head_dim)
 
         """query_states  = self.q_proj(hidden_states ).view(hidden_shape ).transpose(1, 2)
         key_states  =   self.k_proj(hidden_states ).view(hidden_shape ).transpose(1, 2)
         value_states  = self.v_proj(hidden_states ).view(hidden_shape ).transpose(1, 2)"""
-
 
         # Vision
         # import ipdb; ipdb.set_trace()

@@ -30,7 +30,13 @@ class ModelArguments:
     # mm_attn_implementation: Optional[str] = field(default="flash_attention_2")
     # Token downsampling Arguments
     # use_token_compression: Optional[bool] = field(default=False)
-
+    gen_vision_cls: Optional[str] = field(default="Coscom_DV4x8x8")
+    gen_vision_image_token_size : int = field(
+        default=64000,
+    )
+    gen_vision_n_embed: int = field(
+        default= 6 ,
+    )
 
 @dataclass
 class DataArguments:

@@ -127,8 +127,22 @@ def train():
 
     config = MultiModalityConfig_SepVL.from_pretrained(model_args.model_path, cache_dir='./cache_dir')
     setattr(config, '_attn_implementation_new', training_args._attn_implementation_new)
-   
+
+    # ADD  gen_vision_model
+    setattr(config.gen_vision_config, 'cls', model_args.gen_vision_cls)
+    setattr(config.gen_vision_config.params, 'image_token_size', model_args.gen_vision_image_token_size)
+    setattr(config.gen_vision_config.params, 'n_embed', model_args.gen_vision_n_embed)
  
+    # ADD gen_head
+    setattr(config.gen_head_config.params, 'image_token_size', model_args.gen_vision_image_token_size)
+ 
+    # ADD languages
+    setattr(config.language_config, 'max_position_embeddings', model_args.gen_vision_image_token_size)
+ 
+    # aligner
+    setattr(config.gen_aligner_config.params, 'input_dim', model_args.gen_vision_n_embed)
+
+
     # import ipdb; ipdb.set_trace()
     # model: MultiModalityCausalLM_SepVL = AutoModelForCausalLM.from_pretrained(
     #     model_args.model_path, trust_remote_code=True, config=config,  cache_dir='./cache_dir'
@@ -152,6 +166,7 @@ def train():
  
         pretrained_dict = torch.load(model_path, map_location="cpu")  # 加载到 CPU
         model_dict = model.state_dict()  # 获取当前模型的权重
+        # import ipdb; ipdb.set_trace()
 
         for key in model_dict:
             if '_text' in key :
@@ -166,12 +181,15 @@ def train():
                 if pretrained_key in pretrained_dict:
                     model_dict[key] = pretrained_dict[pretrained_key]
                 # print(f'22222222222222', key)
+            elif 'gen_vision' in key or 'gen_head' in key or 'gen_embed' in key or 'gen_aligner' in key:
+                # 换个vqvae, 这一部分不要了, 保持cosmos vqvae的原参数
+                pass
             else:
                 model_dict[key] = pretrained_dict[key] # model_dict[key] == pretrained_dict[key]
                 # print(f'33333333333333')
-                
-
+        
         # 将更新后的权重加载到模型中
+
         msg = model.load_state_dict(model_dict, strict=True)
         print(msg, '!!!!!!!!!!!!!!!')
         return model
@@ -213,6 +231,12 @@ def train():
     if model.config.gen_vision_encoder_lr is None:
         for p in model.gen_vision_model.parameters():
             p.requires_grad = False
+
+        # ADD
+        if hasattr(model, 'gen_vision_model_decoder'):
+            for p in model.gen_vision_model_decoder.parameters():
+                p.requires_grad = False
+
 
     if model.config.aligner_lr is None:
         for p in model.aligner.parameters():

@@ -126,8 +126,12 @@ def train():
 
     config = MultiModalityConfig.from_pretrained(model_args.model_path, cache_dir='./cache_dir')
     setattr(config, '_attn_implementation_new', training_args._attn_implementation_new)
-   
+    
+    
+    
  
+
+
 
     model: MultiModalityCausalLM = AutoModelForCausalLM.from_pretrained(
         model_args.model_path, trust_remote_code=True, config=config,  cache_dir='./cache_dir'

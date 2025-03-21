@@ -443,3 +443,6 @@ checkpoints
 *tmp*.py
 split.bash
 rename.py
+output.png
+test_coscom.py
+pretrained_ckpts

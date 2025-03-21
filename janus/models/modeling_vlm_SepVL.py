@@ -45,6 +45,9 @@ from torch.nn import functional as F
 from janus.models.clip_encoder import CLIPVisionTower
 from janus.models.projector import MlpProjector
 
+# ADD 
+import mediapy as media
+from .cosmos_tokenizer.utils import numpy2tensor, tensor2numpy
 
 class vision_head(torch.nn.Module):
     def __init__(self, params):
@@ -70,11 +73,21 @@ def model_name_to_cls(cls_name):
 
     elif "CLIPVisionTower" in cls_name:
         cls = CLIPVisionTower
+    
+    # ADD
+    elif "Cosmos" in cls_name:
+        from janus.models.cosmos_tokenizer.video_lib import CausalVideoTokenizer
+        # import ipdb;ipdb.set_trace()
+        # input_tensor = torch.randn(1, 3, 9, 512, 512).to('cuda').to(torch.bfloat16)  # [B, C, T, H, W]
+        
+        # encoder = CausalVideoTokenizer(checkpoint_enc=f'pretrained_ckpts/{model_name}/encoder.jit')
+        # decoder = CausalVideoTokenizer(checkpoint_dec=f'pretrained_ckpts/{model_name}/decoder.jit')
+        cls =  CausalVideoTokenizer 
 
     elif "VQ" in cls_name:
         from janus.models.vq_model import VQ_models
 
-        cls = VQ_models[cls_name]
+        cls = VQ_models[cls_name]   
     elif "vision_head" in cls_name:
         cls = vision_head
     else:
@@ -214,7 +227,16 @@ class MultiModalityCausalLM_SepVL(MultiModalityPreTrainedModel):
 
         gen_vision_config = config.gen_vision_config
         gen_vision_cls = model_name_to_cls(gen_vision_config.cls)
-        self.gen_vision_model = gen_vision_cls()
+        if gen_vision_config.cls == 'Cosmos_DV4x8x8':
+            model_name = "Cosmos-0.1-Tokenizer-DV4x8x8"
+            import sys; cur_dir = os.path.dirname(os.path.abspath(__file__)); sys.path.append(os.path.join(cur_dir, '../../'))
+            self.gen_vision_model = gen_vision_cls(checkpoint_enc=f'pretrained_ckpts/{model_name}/encoder.jit')
+            self.gen_vision_model_decoder = gen_vision_cls(checkpoint_dec=f'pretrained_ckpts/{model_name}/decoder.jit')
+
+        else:
+            self.gen_vision_model = gen_vision_cls()
+        # encoder = CausalVideoTokenizer(checkpoint_enc=f'pretrained_ckpts/{model_name}/encoder.jit')
+        # decoder = CausalVideoTokenizer(checkpoint_dec=f'pretrained_ckpts/{model_name}/decoder.jit')
 
         gen_aligner_config = config.gen_aligner_config
         gen_aligner_cls = model_name_to_cls(gen_aligner_config.cls)
@@ -434,8 +456,49 @@ class MultiModalityCausalLM_SepVL(MultiModalityPreTrainedModel):
         )
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
+        if "image" in modals and inputs_embeds is None:
+            inputs_embeds = self.prepare_inputs_embeds(
+                input_ids=input_ids,
+                pixel_values=pixel_values,
+                images_seq_mask=images_seq_mask,
+                images_emb_mask=images_emb_mask,
+            )
+            input_ids = None
+
+            return self.language_model.forward(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                position_ids=position_ids,
+                past_key_values=past_key_values,
+                inputs_embeds=inputs_embeds,
+                labels=labels,
+                use_cache=use_cache,
+                output_attentions=output_attentions,
+                output_hidden_states=output_hidden_states,
+                return_dict=return_dict,
+                cache_position=cache_position,
+                **kwargs,
+                )
+
+        elif "text" in modals:
+            # print("models!!",modals)
+            return self.language_model.forward(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                position_ids=position_ids,
+                past_key_values=past_key_values,
+                inputs_embeds=inputs_embeds,
+                labels=labels,
+                use_cache=use_cache,
+                output_attentions=output_attentions,
+                output_hidden_states=output_hidden_states,
+                return_dict=return_dict,
+                cache_position=cache_position,
+                **kwargs,
+                )
+        
         # import ipdb; ipdb.set_trace() 
-        if 'image_gen' in modals:
+        elif 'image_gen' in modals:
             image_gen = True
             b, n = pixel_values.shape[0:2]
             ori_images = rearrange(pixel_values, "b n c h w -> (b n) c h w")  # 8, 3, 384, 384
@@ -443,14 +506,26 @@ class MultiModalityCausalLM_SepVL(MultiModalityPreTrainedModel):
 
             # 获取第一个尺度图片的vq index
             images = self.resize_transform(ori_images) # torch.Size([8, 3, 96, 96])
-            z_q, (vq_loss, commit_loss, entropy_loss), (perplexity, min_encodings, min_encoding_indices) = self.gen_vision_model.encode(images)
-            images_ids = min_encoding_indices.view(b * n, -1)
 
-            # 获取第一个尺度文本、图片的tokens数目
+            # import ipdb; ipdb.set_trace()
+            # coscom
+            if self.config.gen_vision_config.cls == 'Cosmos_DV4x8x8':
+                encoder = self.gen_vision_model
+                if images.dim() == 4:
+                    images = images.unsqueeze(2)
+                (indices, codes) = encoder.encode(images) 
+                b, t, h, w = indices.shape
+                images_ids = indices.view(b, -1)
+            else:
+                z_q, (vq_loss, commit_loss, entropy_loss), (perplexity, min_encodings, min_encoding_indices) = self.gen_vision_model.encode(images)
+                images_ids = min_encoding_indices.view(b * n, -1)
+
+            # 获取第一个尺度文本、图片的tokens数目  
             image_token_nums = images_ids.size(1)
             text_token_nums = input_ids.size(1)
 
             # 获取图像和文本的embedding用于自回归
+            # import ipdb; ipdb.set_trace()
             img_embeds = self.prepare_gen_img_embeds(images_ids) # torch.Size([32, 36, 2048])
             inputs_embeds = self.language_model.get_input_embeddings()(input_ids)
 
@@ -465,7 +540,6 @@ class MultiModalityCausalLM_SepVL(MultiModalityPreTrainedModel):
             # 所有的labels ids拼一起
             labels = torch.cat([labels, images_ids], dim=1)
 
-       
             # attention_mask = self.build_attention_mask(input_ids, images_ids, [], pad_token=100002).to(images_ids.device) 
             # attention_mask = (attention_mask.unsqueeze(1) - 1.)* torch.finfo(inputs_embeds.dtype).max
             # attention_mask = attention_mask.to(inputs_embeds.dtype)
@@ -499,16 +573,38 @@ class MultiModalityCausalLM_SepVL(MultiModalityPreTrainedModel):
             # ==============  第一个尺度图片重建来可视化 =================
             logits = output['logits']
             pred_scale1_ids = torch.argmax(logits[:, text_token_nums-1:-1], dim=-1)  
-            dec_scale1_recon = self.gen_vision_model.decode_code(
-                pred_scale1_ids[0].to(dtype=torch.int),
-                shape=[1, 8, 24, 24]
-            )
-            dec_scale1_recon = dec_scale1_recon.to(torch.float32).cpu().numpy().transpose(0, 2, 3, 1)
             
-            dec_scale1_recon = np.clip((dec_scale1_recon + 1) / 2 * 255, 0, 255).astype(np.uint8)
-            save_dir = '/storage/zhubin/Janus-MoE/reconstructed_samples'; os.makedirs(save_dir, exist_ok=True)
-            save_path_scale1_recon = os.path.join(save_dir, f"scale1_recon.jpg")
-            PIL.Image.fromarray(dec_scale1_recon[0]).save(save_path_scale1_recon)
+            # import ipdb; ipdb.set_trace()
+            if self.config.gen_vision_config.cls == 'Cosmos_DV4x8x8':
+                pred_scale1_ids = pred_scale1_ids.reshape(indices.shape)
+                reconstructed_tensor = self.gen_vision_model_decoder.decode(pred_scale1_ids)
+                reconstructed_tensor = reconstructed_tensor.squeeze(2) 
+
+                # reconstructed_tensor = reconstructed_tensor.permute(1,2,0) 
+                recon_image = tensor2numpy(reconstructed_tensor)[0]
+                save_dir = '/storage/zhubin/Janus-MoE/reconstructed_samples'; os.makedirs(save_dir, exist_ok=True)
+                save_path_scale1_recon = os.path.join(save_dir, f"scale1_recon.jpg")
+                media.write_image(save_path_scale1_recon, recon_image)
+            else:
+                dec_scale1_recon = self.gen_vision_model.decode_code(
+                pred_scale1_ids[0].to(dtype=torch.int),
+                    shape=[1, 8, 24, 24]
+                )
+                dec_scale1_recon = dec_scale1_recon.to(torch.float32).cpu().numpy().transpose(0, 2, 3, 1)
+                
+                dec_scale1_recon = np.clip((dec_scale1_recon + 1) / 2 * 255, 0, 255).astype(np.uint8)
+                save_dir = '/storage/zhubin/Janus-MoE/reconstructed_samples'; os.makedirs(save_dir, exist_ok=True)
+                save_path_scale1_recon = os.path.join(save_dir, f"scale1_recon.jpg")
+                PIL.Image.fromarray(dec_scale1_recon[0]).save(save_path_scale1_recon)
+            
+
+
+            """
+
+
+       
+            
+            """
 
             return output
  

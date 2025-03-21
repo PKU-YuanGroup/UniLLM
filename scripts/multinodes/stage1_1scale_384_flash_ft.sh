@@ -92,7 +92,7 @@ torchrun --nnodes $WORLD_SIZE \
     --save_strategy "steps" \
     --save_steps 1000 \
     --save_total_limit 2 \
-    --llm_lr 1e-4 \
+    --llm_lr 1e-3 \
     --weight_decay 0. \
     --warmup_ratio 0.0 \
     --lr_scheduler_type "cosine" \
