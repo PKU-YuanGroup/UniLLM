@@ -473,27 +473,44 @@ class LlamaDecoderLayer(nn.Module):
         residual = hidden_states
 
         # =========================== FIXME ==========================
+        moe_losses = []
         # hidden_states = self.post_attention_layernorm(hidden_states)
         if image_token_nums>0 and hidden_states.shape[-2] == 1:
             hidden_states = self.post_attention_layernorm_vision(hidden_states)
+            hidden_states  = self.mlp_vision(hidden_states)
+            if isinstance(hidden_states, tuple):
+                moe_losses.append(hidden_states[1])
+                hidden_states = hidden_states[0]
         elif image_token_nums == 0:
             hidden_states = self.post_attention_layernorm_text(hidden_states)
+            hidden_states  = self.mlp_text(hidden_states)
+            if isinstance(hidden_states, tuple):
+                moe_losses.append(hidden_states[1])
+                hidden_states = hidden_states[0]
         else:
             hidden_states_text = self.post_attention_layernorm_text(hidden_states[:,    :-image_token_nums ])
             hidden_states_vision = self.post_attention_layernorm_vision(hidden_states[:, -image_token_nums:])
-            hidden_states = torch.cat([hidden_states_text, hidden_states_vision], dim=-2) 
+            # hidden_states = torch.cat([hidden_states_text, hidden_states_vision], dim=-2) 
 
-        # hidden_states = self.mlp(hidden_states)
-        hidden_states_text = self.mlp_text(hidden_states[:, :-image_token_nums])
-        hidden_states_vision = self.mlp_vision(hidden_states[:, -image_token_nums:])
-        hidden_states = torch.cat([hidden_states_text, hidden_states_vision], dim=-2)
+                # hidden_states = self.mlp(hidden_states)
+            hidden_states_text = self.mlp_text(hidden_states_text)
+            if isinstance(hidden_states_text, tuple):
+                moe_losses.append(hidden_states_text[1])
+                hidden_states_text = hidden_states_text[0]
+            hidden_states_vision = self.mlp_vision(hidden_states_vision)
+            if isinstance(hidden_states_vision, tuple):
+                moe_losses.append(hidden_states_vision[1])
+                hidden_states_vision = hidden_states_vision[0]
+            hidden_states = torch.cat([hidden_states_text, hidden_states_vision], dim=-2)
+
+        
 
         hidden_states = residual + hidden_states
 
         outputs = (hidden_states, )
         if output_attentions:
             outputs += (self_attn_weights,)
-
+        outputs += (moe_losses,)
         return outputs
 
 
@@ -720,7 +737,8 @@ class LlamaModel(LlamaPreTrainedModel):
         # decoder layers
         all_hidden_states = () if output_hidden_states else None
         all_self_attns = () if output_attentions else None
-
+        all_moe_loss = []
+        
         for decoder_layer in self.layers[: self.config.num_hidden_layers]:
             if output_hidden_states:
                 all_hidden_states += (hidden_states,)
@@ -760,6 +778,8 @@ class LlamaModel(LlamaPreTrainedModel):
 
             if output_attentions:
                 all_self_attns += (layer_outputs[1],)
+            # ADD
+            all_moe_loss.extend(layer_outputs[-1])
 
         # FIXME 后续需要分开图像和文本
         # hidden_states = self.norm(hidden_states)
@@ -783,6 +803,7 @@ class LlamaModel(LlamaPreTrainedModel):
             hidden_states=all_hidden_states,
             attentions=all_self_attns,
         )
+        output.all_moe_loss = all_moe_loss
         return output if return_dict else output.to_tuple()
 
     def _update_causal_mask(
@@ -1047,6 +1068,9 @@ class LlamaForCausalLM(LlamaPreTrainedModel, GenerationMixin):
         loss = None
         if labels is not None:
             loss = self.loss_function(logits=logits, labels=labels, vocab_size=self.config.vocab_size if not vocab_size else vocab_size, **kwargs)
+        
+        if len(outputs.all_moe_loss):
+            loss += 0.01 * sum(outputs.all_moe_loss)
 
         if not return_dict:
             output = (logits,) + outputs[1:]

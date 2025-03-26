@@ -10,7 +10,9 @@ for node in nodes:
     result = subprocess.run(["ssh", f"{node}", f"pkill -f /train_var.py"], capture_output=True, text=True)
     result = subprocess.run(["ssh", f"{node}", f"pkill -f  v2.py"], capture_output=True, text=True)
     result = subprocess.run(["ssh", f"{node}", f"pkill -f  SepVL.py"], capture_output=True, text=True)
-
+    result = subprocess.run(["ssh", f"{node}", f"pkill -f  qwen_vllm.py "], capture_output=True, text=True)
+    result = subprocess.run(["ssh", f"{node}", f"pkill -f  dora "], capture_output=True, text=True)
+    result = subprocess.run(["ssh", f"{node}", f"pkill -f  demo "], capture_output=True, text=True)
 
 """
 ps -ef | grep objaverse | grep -v grep | awk '{print $2}' | xargs kill -9

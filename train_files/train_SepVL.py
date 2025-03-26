@@ -78,9 +78,9 @@ def set_seed(seed=42):
 def make_flattening_supervised_data_module(vlprocessor: transformers.ProcessorMixin, data_args) -> Dict:
     """Make batch flattened dataset and collator for supervised fine-tuning."""
  
-    data_args.image_under_data_files = data_args.image_under_data_files.split(',')
-    data_args.image_gen_data_files = data_args.image_gen_data_files.split(',')
-    data_args.text_chat_data_files = data_args.text_chat_data_files.split(',')
+    data_args.image_under_data_files = [ filepath.strip()  for filepath in  data_args.image_under_data_files.split(',') ]
+    data_args.image_gen_data_files =   [ filepath.strip()  for filepath in  data_args.image_gen_data_files.split(',') ]
+    data_args.text_chat_data_files =   [ filepath.strip()  for filepath in  data_args.text_chat_data_files.split(',') ]
     data_args.sample_rate = data_args.sample_rate.split(','); data_args.sample_rate = [ int(i) for i in data_args.sample_rate]
     data_args.batchsize_list = data_args.batchsize_list.split(','); data_args.batchsize_list = [ int(i) for i in data_args.batchsize_list]
     # data_args.dataset = data_args.dataset.split(',')
@@ -161,10 +161,15 @@ def train():
 
     # import ipdb; ipdb.set_trace()
     # ============== 继承权重 ======================
-    def inherit_weights(model, model_path="/storage/zhubin/Janus-MoE/Janus-Pro-1B/pytorch_model.bin"):
+    def inherit_weights(model, 
+                        model_path=None,
+                        model_path2=None):
         # 加载 Hugging Face 格式的预训练模型
- 
+        # import ipdb; ipdb.set_trace()
         pretrained_dict = torch.load(model_path, map_location="cpu")  # 加载到 CPU
+        if model_path2 is not None:
+            pretrained_dict2 = torch.load(model_path2, map_location="cpu")
+            pretrained_dict.update(pretrained_dict2)
         model_dict = model.state_dict()  # 获取当前模型的权重
         # import ipdb; ipdb.set_trace()
 
@@ -185,7 +190,20 @@ def train():
                 # 换个vqvae, 这一部分不要了, 保持cosmos vqvae的原参数
                 pass
             else:
-                model_dict[key] = pretrained_dict[key] # model_dict[key] == pretrained_dict[key]
+                try:
+                    model_dict[key] = pretrained_dict[key] # model_dict[key] == pretrained_dict[key]
+                except Exception as e:
+                    import ipdb; ipdb.set_trace()
+                    a=1
+                    """
+aa = list(pretrained_dict.keys())
+with open('pretrained_dict.json', 'w', encoding='utf-8') as f:
+    json.dump(aa, f,  indent=2)
+
+aa = list(pretrained_dict2.keys())
+with open('pretrained_dict2.json', 'w', encoding='utf-8') as f:
+    json.dump(aa, f,  indent=2)
+                    """
                 # print(f'33333333333333')
         
         # 将更新后的权重加载到模型中
@@ -193,8 +211,18 @@ def train():
         msg = model.load_state_dict(model_dict, strict=True)
         print(msg, '!!!!!!!!!!!!!!!')
         return model
-    model = inherit_weights(model, f'{model_args.model_path}/pytorch_model.bin')
- 
+
+
+    if '7B' in model_args.model_path:
+        model = inherit_weights(model, 
+                                f'{model_args.model_path}/pytorch_model-00001-of-00002.bin', 
+                                f'{model_args.model_path}/pytorch_model-00002-of-00002.bin')
+    elif '1B' in model_args.model_path:
+        model = inherit_weights(model, f'{model_args.model_path}/pytorch_model.bin')
+
+    if training_args.moe:
+        model.initialize_moe_modules(training_args)
+
     if training_args.gradient_checkpointing:
         if hasattr(model.language_model, "enable_input_require_grads"):
             model.language_model.enable_input_require_grads()
@@ -205,6 +233,11 @@ def train():
 
  
     vl_chat_processor: VLChatProcessor = VLChatProcessor.from_pretrained(model_args.model_path )
+    vl_chat_processor.tokenizer_model_max_length = model_args.tokenizer_model_max_length
+    vl_chat_processor.use_tokenizer_truncation =  model_args.use_tokenizer_truncation
+
+
+
     tokenizer = vl_chat_processor.tokenizer
     assert tokenizer.pad_token is not None
     # if tokenizer.pad_token is None:

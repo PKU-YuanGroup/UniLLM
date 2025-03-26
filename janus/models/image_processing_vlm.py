@@ -125,8 +125,8 @@ class VLMImageProcessor(BaseImageProcessor):
             self.background_color = tuple([int(x * 255) for x in image_mean])
 
     def resize(self, pil_img: Image) -> np.ndarray:
+        
         """
-
         Args:
             pil_img (PIL.Image): [H, W, 3] in PIL.Image in RGB
 

@@ -10,7 +10,7 @@ ARG_NPROC_PER_NODE=8
 
 # ARG_MASTER_ADDR="127.0.0.1"
 ARG_MASTER_ADDR=$3
-ARG_MASTER_PORT=16656
+ARG_MASTER_PORT=16655
 
 
 # Multiple conditions
@@ -49,18 +49,18 @@ echo "NPROC_PER_NODE: $NPROC_PER_NODE"
 
 # Training Arguments
 # GLOBAL_BATCH_SIZE=256
-GLOBAL_BATCH_SIZE=$[256 / 16] # 
-LOCAL_BATCH_SIZE=1
-GRADIENT_ACCUMULATION_STEPS=$[$GLOBAL_BATCH_SIZE/($WORLD_SIZE*$NPROC_PER_NODE*$LOCAL_BATCH_SIZE)]
-GRADIENT_ACCUMULATION_STEPS=1
-echo $GRADIENT_ACCUMULATION_STEPS
 
+LOCAL_BATCH_SIZE=1
+GLOBAL_BATCH_SIZE=$[256 / 16] # 
+GRADIENT_ACCUMULATION_STEPS=$[$GLOBAL_BATCH_SIZE/($WORLD_SIZE*$NPROC_PER_NODE*$LOCAL_BATCH_SIZE)]
+GRADIENT_ACCUMULATION_STEPS=2
+echo $GRADIENT_ACCUMULATION_STEPS
 
 # Log Arguments
 export WANDB_PROJECT=videollama3_qwen2.5_2b
 RUN_NAME=stage_1
 DATA_DIR=/storage/dataset/filter_aes/final_coyo
-OUTP_DIR=checkpoints/stage1_1scale_384_flash_ft_SepVL_Cosmos_0321
+OUTP_DIR=checkpoints/stage1_1scale_384_flash_ft_SepVL_Cosmos_0322
  
 cd /storage/zhubin/Janus-MoE/ 
 source /storage/miniconda3/etc/profile.d/conda.sh
@@ -97,7 +97,7 @@ torchrun --nnodes $WORLD_SIZE \
     --gen_head_lr 1e-3 \
     --gen_embed_lr 1e-3 \
     --weight_decay 0. \
-    --warmup_ratio 0.0 \
+    --warmup_ratio 0.01 \
     --lr_scheduler_type "cosine" \
     --logging_steps 10 \
     --gradient_checkpointing True \
@@ -105,19 +105,23 @@ torchrun --nnodes $WORLD_SIZE \
     --report_to tensorboard \
     --run_name $RUN_NAME \
     --sample_rate  0,1,0 \
-    --batchsize_list  0,2,0 \
-    --samples_per_epoch $[20000*256] \
+    --batchsize_list  8,12,2 \
+    --samples_per_epoch $[180000*256] \
     --dataset "image_under||image_gen||text_chat" \
-    --image_under_data_files  /storage/yqs/dataset/BAAI/DenseFusion-1M/DenseFusion-4V-100k/mini_uni_DenseFusion-4V-100k.json \
+    --image_under_data_files  /storage/yqs/dataset/BAAI/DenseFusion-1M/DenseFusion-4V-100k/uni_DenseFusion-4V-100k.json \
     --image_under_rootdir /storage/yqs/dataset/BAAI/DenseFusion-1M/images \
     --image_gen_data_files  /storage/dataset/filter_aes/cap_merge_final_640/recap2/uni_part0_cap6595998.json  \
     --image_gen_rootdir  /storage/dataset/recap_datacomp_1b_data_20241023_supply/output_undownloaded \
-    --text_chat_data_files /storage/yqs/dataset/BAAI/Infinity-Instruct/mini_uni_Gen.json  \
+    --text_chat_data_files /storage/yqs/dataset/BAAI/Infinity-Instruct/uni_Gen.json   \
     --_attn_implementation_new  "flash_attention_2"   \
-    --gen_vision_cls    Cosmos_DV4x8x8 \
+    --gen_vision_cls    Cosmos_DV8x16x16 \
     --gen_vision_image_token_size  64000 \
-    --gen_vision_n_embed  6  
-    
+    --gen_vision_n_embed  6  \
+    --tokenizer_model_max_length   4096 \
+    --use_tokenizer_truncation True
+
+        # --sample_rate  7,10,3 \
+    # --sample_rate  7,10,3 \
     #     : bool = field(default=True)
     # is_causal: bool = field(default=False)
     # : bool = field(default=False)
@@ -128,7 +132,7 @@ torchrun --nnodes $WORLD_SIZE \
     # --image_under_rootdir /storage/yqs/dataset/BAAI/DenseFusion-1M/images \
     # --image_gen_data_files  /storage/dataset/filter_aes/cap_merge_final_640/recap2/uni_part0_cap6595998.json \
     # --image_gen_rootdir  /storage/dataset/recap_datacomp_1b_data_20241023_supply/output_undownloaded \
-    # --text_chat_data_files /storage/yqs/dataset/BAAI/Infinity-Instruct/uni_7M.json/storage/yqs/dataset/BAAI/Infinity-Instruct/uni_Gen.json 
+    # --text_chat_data_files /storage/yqs/dataset/BAAI/Infinity-Instruct/uni_7M.json  /storage/yqs/dataset/BAAI/Infinity-Instruct/uni_Gen.json 
 
     # img_und  bs 12  76g  zero1 
     # txet_chat  bs 2 65927MiB  zero1 

@@ -259,7 +259,7 @@ class JanusTrainer(Trainer):
 
             if self.args.llm_lr is not None:
                 lm_parameters = [
-                    name for name, _ in optimized_parameters if "vision_model" not in name and "aligner" not in name and "gen_aligner" not in name and "gen_head" not in name and "gen_embed" not in name and "var_embedding" not in name and "var" not in name # yuwei:"var" not in name 是我设置的debug
+                    name for name, _ in optimized_parameters if "vision_model" not in name and "aligner" not in name and "gen_aligner" not in name and "gen_head" not in name and "gen_embed" not in name and "gen_vision" not in name # yuwei:"var" not in name 是我设置的debug
                 ]
                 decay_lm_parameters = [name for name in lm_parameters if name in decay_parameters]
                 nodecay_lm_parameters = [name for name in lm_parameters if name not in decay_parameters]
@@ -268,36 +268,18 @@ class JanusTrainer(Trainer):
                         "params": [p for n, p in optimized_parameters if n in decay_lm_parameters],
                         "weight_decay": self.args.weight_decay,
                         "lr": self.args.llm_lr,
+                        "name": "decay_parameters"
                     },
                     {
                         "params": [p for n, p in optimized_parameters if n in nodecay_lm_parameters],
                         "weight_decay": 0.0,
                         "lr": self.args.llm_lr,
+                        "name": "no_decay_parameters"
                     }
                 ])
                 # print(lm_parameters, '!!!!!!')
             
             # == zb == self.var_embedding 
-            """if self.args.lm_pos_lr is not None:
-                # print(f'====================={self.args.lm_pos_lr=}================!')
-                lm_pos_parameters = [
-                    name for name, _ in optimized_parameters if "var_embedding"  in name  
-                ]
-                # print(lm_pos_parameters, '#####')
-                decay_lm_pos_parameters = [name for name in lm_pos_parameters if name in decay_parameters]
-                nodecay_lm_pos_parameters = [name for name in lm_pos_parameters if name not in decay_parameters]
-                optimizer_grouped_parameters.extend([
-                    {
-                        "params": [p for n, p in optimized_parameters if n in decay_lm_pos_parameters],
-                        "weight_decay": self.args.weight_decay,
-                        "lr": self.args.lm_pos_lr,
-                    },
-                    {
-                        "params": [p for n, p in optimized_parameters if n in nodecay_lm_pos_parameters],
-                        "weight_decay": 0.0,
-                        "lr": self.args.lm_pos_lr,
-                    }
-                ])"""
 
             if self.args.multi_scale_lr is not None:
                 # print(f'====================={self.args.lm_pos_lr=}================!')
@@ -312,11 +294,13 @@ class JanusTrainer(Trainer):
                         "params": [p for n, p in optimized_parameters if n in decay_multi_scale_parameters],
                         "weight_decay": self.args.weight_decay,
                         "lr": self.args.multi_scale_lr,
+                        "name": "decay_parameters"
                     },
                     {
                         "params": [p for n, p in optimized_parameters if n in nodecay_multi_scale_parameters],
                         "weight_decay": 0.0,
                         "lr": self.args.multi_scale_lr,
+                        "name": "no_decay_parameters"
                     }
                 ])
 
@@ -329,11 +313,13 @@ class JanusTrainer(Trainer):
                         "params": [p for n, p in optimized_parameters if n in decay_projector_parameters], 
                         "weight_decay": self.args.weight_decay,
                         "lr": self.args.aligner_lr,
+                        "name": "decay_parameters"
                     },
                     {
                         "params": [p for n, p in optimized_parameters if n in nodecay_projector_parameters],
                         "weight_decay": 0.0,
                         "lr": self.args.aligner_lr,
+                        "name": "no_decay_parameters"
                     }
                 ])
 
@@ -346,11 +332,13 @@ class JanusTrainer(Trainer):
                         "params": [p for n, p in optimized_parameters if n in decay_vision_encoder_parameters], 
                         "weight_decay": self.args.weight_decay,
                         "lr": self.args.vision_encoder_lr,
+                        "name": "decay_parameters"
                     },
                     {
                         "params": [p for n, p in optimized_parameters if n in nodecay_vision_encoder_parameters],
                         "weight_decay": 0.0,
                         "lr": self.args.vision_encoder_lr,
+                        "name": "no_decay_parameters"
                     }
                 ])
             
@@ -363,11 +351,13 @@ class JanusTrainer(Trainer):
                         "params": [p for n, p in optimized_parameters if n in decay_gen_aligner_parameters], 
                         "weight_decay": self.args.weight_decay,
                         "lr": self.args.gen_aligner_lr,
+                        "name": "decay_parameters"
                     },
                     {
                         "params": [p for n, p in optimized_parameters if n in nodecay_gen_aligner_parameters],
                         "weight_decay": 0.0,
                         "lr": self.args.gen_aligner_lr,
+                        "name": "no_decay_parameters"
                     }
                 ])
             
@@ -380,11 +370,13 @@ class JanusTrainer(Trainer):
                         "params": [p for n, p in optimized_parameters if n in decay_gen_head_parameters], 
                         "weight_decay": self.args.weight_decay,
                         "lr": self.args.gen_head_lr,
+                        "name": "decay_parameters"
                     },
                     {
                         "params": [p for n, p in optimized_parameters if n in nodecay_gen_head_parameters],
                         "weight_decay": 0.0,
                         "lr": self.args.gen_head_lr,
+                        "name": "no_decay_parameters"
                     }
                 ])
 
@@ -397,18 +389,23 @@ class JanusTrainer(Trainer):
                         "params": [p for n, p in optimized_parameters if n in decay_gen_embed_parameters], 
                         "weight_decay": self.args.weight_decay,
                         "lr": self.args.gen_embed_lr,
+                        "name": "decay_parameters"
                     },
                     {
                         "params": [p for n, p in optimized_parameters if n in nodecay_gen_embed_parameters],
                         "weight_decay": 0.0,
                         "lr": self.args.gen_embed_lr,
+                        "name": "no_decay_parameters"
                     }
                 ])
 
             
 
             optimizer_cls, optimizer_kwargs = Trainer.get_optimizer_cls_and_kwargs(self.args)
-
+            if self.args.moe:
+                from deepspeed.moe.utils import split_params_into_different_moe_groups_for_optimizer
+                optimizer_grouped_parameters = split_params_into_different_moe_groups_for_optimizer(optimizer_grouped_parameters)
+            
             self.optimizer = optimizer_cls(optimizer_grouped_parameters, **optimizer_kwargs)
             if optimizer_cls.__name__ == "Adam8bit":
                 import bitsandbytes

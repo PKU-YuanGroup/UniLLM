@@ -98,7 +98,7 @@ class VLChatProcessor(ProcessorMixin):
         ignore_id: int = -100,
 
         tokenizer_model_max_length: int = 2048, 
-        use_tokenizer_pad: bool = False,
+        use_tokenizer_truncation: bool = False,
         **kwargs,
     ):
         self.image_processor = image_processor
@@ -124,7 +124,7 @@ class VLChatProcessor(ProcessorMixin):
 
 
         self.tokenizer_model_max_length = tokenizer_model_max_length
-        self.use_tokenizer_pad = use_tokenizer_pad
+        self.use_tokenizer_truncation = use_tokenizer_truncation
 
         self.generation_prompt_length = len(self.tokenizer.encode("<|Assistant|>:", return_tensors="pt"))
 
@@ -312,6 +312,8 @@ class VLChatProcessor(ProcessorMixin):
         assert (
             prompt is None or conversations is None
         ), "prompt and conversations cannot be used at the same time."
+        
+        # import ipdb; ipdb.set_trace()
 
         if modal == "image_gen":
             sft_format = self.apply_sft_template_for_multi_turn_prompts(
@@ -328,13 +330,12 @@ class VLChatProcessor(ProcessorMixin):
             )
         else:
             sft_format = prompt
-        # print(self.use_tokenizer_pad,"16546546")
-
+    
         # =================
         # tokenize  pad for image generation prompt
-        if self.use_tokenizer_pad:
+        if self.use_tokenizer_truncation:
             input_ids = self.tokenizer.encode(sft_format,
-                                            padding="max_length",  # 填充到最大长度
+                                                # padding="max_length",  # 填充到最大长度
                                                 max_length=self.tokenizer_model_max_length,         # 设置最大长度
                                                 truncation=True,       # 截断超过最大长度的部分
                                                 # return_tensors="pt"    # 返回 PyTorch 张量, 不选择就返回一个list
@@ -349,16 +350,19 @@ class VLChatProcessor(ProcessorMixin):
 
         
         # Truncate sequences to max length as image embeddings can make the sequence longer, for image generation
-        if self.tokenizer_model_max_length is not None:
-            # import ipdb; ipdb.set_trace()
-            # print(f'inputs ids length:{len(input_ids)} ==== {self.tokenizer_model_max_length}!')
-            if len(input_ids) > self.tokenizer_model_max_length:
-                print(f'inputs ids length:{len(input_ids)} is longer than {self.tokenizer_model_max_length}!')
-            input_ids =  input_ids[:self.tokenizer_model_max_length]
+        # if self.tokenizer_model_max_length is not None:
+        #     # import ipdb; ipdb.set_trace()
+        #     # print(f'inputs ids length:{len(input_ids)} ==== {self.tokenizer_model_max_length}!')
+        #     if len(input_ids) > self.tokenizer_model_max_length:
+        #         print(f'inputs ids length:{len(input_ids)} is longer than {self.tokenizer_model_max_length}!')
+        #     input_ids =  input_ids[:self.tokenizer_model_max_length]
         # =================
 
-
         input_ids = torch.LongTensor(input_ids)
+
+        # ====================== FIXME ===============
+        # modal = 'text'
+        # =============================================================================
 
         if is_training and modal == "image_gen":
             targets = torch.full_like(input_ids, self.ignore_id)
@@ -397,6 +401,10 @@ class VLChatProcessor(ProcessorMixin):
                 sample_types = torch.full_like(training_input_ids, self.ignore_id)
                 if message["role"] == "<|Assistant|>":
                     targets[self.generation_prompt_length+1:] = training_input_ids[self.generation_prompt_length+1:].clone()
+                """
+                ipdb> self.tokenizer.decode(training_input_ids[:2])
+                    '<|Assistant|>:'
+                """
                 targets_list.append(targets)
                 sample_types_list.append(sample_types)
 
@@ -404,7 +412,13 @@ class VLChatProcessor(ProcessorMixin):
             sample_types = torch.cat(sample_types_list)
             training_input_ids = torch.cat(training_input_ids_list)
 
-
+            # ADD 
+            # print(training_input_ids.shape,1)
+            if self.use_tokenizer_truncation:
+                targets = targets[:self.tokenizer_model_max_length]
+                sample_types = sample_types[:self.tokenizer_model_max_length]
+                training_input_ids = training_input_ids[:self.tokenizer_model_max_length]
+            # print(training_input_ids.shape,2)
             # truncation
             import torch.nn.functional as F
             def pad_to_max_length(tensor, max_length, pad_value=-100):
@@ -426,22 +440,16 @@ class VLChatProcessor(ProcessorMixin):
                 return padded_tensor
 
             # 对 targets, sample_types, training_input_ids 进行填充
-            max_length = self.tokenizer_model_max_length
-
-
-            if self.use_tokenizer_pad:
-                targets = pad_to_max_length(targets, max_length, pad_value=self.ignore_id)
-                sample_types = pad_to_max_length(sample_types, max_length, pad_value=self.ignore_id)
-                training_input_ids = pad_to_max_length(training_input_ids, max_length, pad_value=self.ignore_id)
-            else:
-                targets =  targets[:self.tokenizer_model_max_length]
-                sample_types = sample_types[:self.tokenizer_model_max_length]
-                training_input_ids = training_input_ids[:self.tokenizer_model_max_length]
-
-            
-            
-
-            
+            # max_length = self.tokenizer_model_max_length
+            # if self.use_tokenizer_pad:
+            #     targets = pad_to_max_length(targets, max_length, pad_value=self.ignore_id)
+            #     sample_types = pad_to_max_length(sample_types, max_length, pad_value=self.ignore_id)
+            #     training_input_ids = pad_to_max_length(training_input_ids, max_length, pad_value=self.ignore_id)
+            # else:
+            #     targets =  targets[:self.tokenizer_model_max_length]
+            #     sample_types = sample_types[:self.tokenizer_model_max_length]
+            #     training_input_ids = training_input_ids[:self.tokenizer_model_max_length]
+ 
             """if self.tokenizer_model_max_length is not None:
                 # import ipdb; ipdb.set_trace()
                 print(f'inputs ids length:{len(targets)} ==== {self.tokenizer_model_max_length}!')

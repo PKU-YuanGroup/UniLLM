@@ -1,21 +1,3 @@
-# Copyright (c) 2023-2024 DeepSeek.
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy of
-# this software and associated documentation files (the "Software"), to deal in
-# the Software without restriction, including without limitation the rights to
-# use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
-# the Software, and to permit persons to whom the Software is furnished to do so,
-# subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
-# FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
-# COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
-# IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-# CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 import torch
 # from transformers import AutoModelForCausalLM
@@ -25,22 +7,30 @@ import numpy as np
 import os
 import PIL.Image
 
+
+from janus.models.cosmos_tokenizer.video_lib import CausalVideoTokenizer
+from janus.models.cosmos_tokenizer.utils import numpy2tensor, tensor2numpy
+import mediapy as media
+from tqdm import tqdm 
 # specify the path to the model
 model_path = "/storage/jp/Janus/Janus-Pro-1B"
 vl_chat_processor: VLChatProcessor = VLChatProcessor.from_pretrained(model_path)
 tokenizer = vl_chat_processor.tokenizer
 
 
-model_path = "/storage/zhubin/Janus-MoE/checkpoints/stage1_1scale_384_flash_ft_SepVL/videollama3_qwen2.5_2b/stage_1/checkpoint-33000"
+model_path = "/storage/zhubin/Janus-MoE/checkpoints/stage1_1scale_384_flash_ft_SepVL_Cosmos_0322/videollama3_qwen2.5_2b/stage_1/checkpoint-83000"
 vl_gpt  = MultiModalityCausalLM_SepVL.from_pretrained(
     model_path, trust_remote_code=True
 )
 vl_gpt = vl_gpt.to(torch.bfloat16).cuda().eval()
 
+# self.gen_vision_model_decoder = gen_vision_cls(checkpoint_dec=f'pretrained_ckpts/{model_name}/decoder.jit')
+
+
 conversation = [
     {
         "role": "User",
-        "content": "A man",
+        "content": "A young girl is standing in a dirt field with a few scattered leaves and a small tree in the background. She is wearing a green dress with a floral pattern and a blue bracelet on her left wrist. Her hair is short and black.",
     },
     {"role": "Assistant", "content": ""},
 ]
@@ -77,10 +67,10 @@ def generate(
     inputs_embeds = mmgpt.language_model.get_input_embeddings()(tokens)
     generated_tokens = torch.zeros((parallel_size, image_token_num_per_image), dtype=torch.int).cuda()
 
-    for i in range(image_token_num_per_image):
+    for i in tqdm(range(image_token_num_per_image)):
         
         if i == 0:
-            outputs = mmgpt.language_model.model(inputs_embeds=inputs_embeds, use_cache=True, past_key_values=outputs.past_key_values if i != 0 else None, image_token_nums=1)
+            outputs = mmgpt.language_model.model(inputs_embeds=inputs_embeds, use_cache=True, past_key_values=outputs.past_key_values if i != 0 else None, image_token_nums=0)
         else:
             outputs = mmgpt.language_model.model(inputs_embeds=inputs_embeds, use_cache=True, past_key_values=outputs.past_key_values if i != 0 else None, image_token_nums=1)
         
@@ -102,24 +92,39 @@ def generate(
         inputs_embeds = img_embeds.unsqueeze(dim=1)
 
 
-    dec = mmgpt.gen_vision_model.decode_code(generated_tokens.to(dtype=torch.int), shape=[parallel_size, 8, img_size//patch_size, img_size//patch_size])
-    dec = dec.to(torch.float32).cpu().numpy().transpose(0, 2, 3, 1)
+    # dec = mmgpt.gen_vision_model.decode_code(generated_tokens.to(dtype=torch.int), shape=[parallel_size, 8, img_size//patch_size, img_size//patch_size])
+    # dec = dec.to(torch.float32).cpu().numpy().transpose(0, 2, 3, 1)
 
-    dec = np.clip((dec + 1) / 2 * 255, 0, 255)
+    # dec = np.clip((dec + 1) / 2 * 255, 0, 255)
 
-    visual_img = np.zeros((parallel_size, img_size, img_size, 3), dtype=np.uint8)
-    visual_img[:, :, :] = dec
+    # visual_img = np.zeros((parallel_size, img_size, img_size, 3), dtype=np.uint8)
+    # visual_img[:, :, :] = dec
 
-    os.makedirs('useless/test', exist_ok=True)
+    # os.makedirs('useless/test', exist_ok=True)
+    # for i in range(parallel_size):
+    #     save_path = os.path.join('useless/test', "img_{}.jpg".format(i))
+    #     PIL.Image.fromarray(visual_img[i]).save(save_path)
+
+    # import ipdb; ipdb.set_trace()
+    h, w = img_size//patch_size, img_size//patch_size
     for i in range(parallel_size):
-        save_path = os.path.join('useless/test', "img_{}.jpg".format(i))
-        PIL.Image.fromarray(visual_img[i]).save(save_path)
+        # generated_tokens = generated_tokens[0] # generated_tokens: (bs, seq_len)
+        pred_scale1_ids = generated_tokens[i].reshape(1,1,h,w)
+        reconstructed_tensor = vl_gpt.gen_vision_model_decoder.decode(pred_scale1_ids) # b, c, t, h, w
+        reconstructed_tensor = reconstructed_tensor.squeeze(2) 
+
+        # reconstructed_tensor = reconstructed_tensor.permute(1,2,0) 
+        recon_image = tensor2numpy(reconstructed_tensor)[0]
+        save_dir = '/storage/zhubin/Janus-MoE/useless_'; os.makedirs(save_dir, exist_ok=True)
+        save_path_scale1_recon = os.path.join(save_dir, f"scale1_infer_{i}.jpg")
+        media.write_image(save_path_scale1_recon, recon_image)
 
 
 generate(
     vl_gpt,
     vl_chat_processor,
     prompt,
+    parallel_size=16
 )
 
 
@@ -133,10 +138,9 @@ conda activate janus_pro
 python generation_inference_SepVL.py
 
 
-
 tensorboard --logdir=/storage/zhubin/Janus-zb/checkpoints/stage1_2scale_384_384_768_sdpa_ft_attnmask_random_replace_0.5_repeat_maskarimage
 
-tensorboard --logdir=/storage/zhubin/Janus-MoE/checkpoints
+tensorboard --logdir=/storage/zhubin/Janus-MoE/checkpoints/stage1_1scale_384_flash_ft_SepVL_Cosmos_0322
 
 
 """

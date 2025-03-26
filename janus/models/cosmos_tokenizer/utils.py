@@ -65,6 +65,8 @@ def load_encoder_model(
     Returns:
         The JIT compiled model loaded to device and on eval mode.
     """
+
+    # import ipdb; ipdb.set_trace()
     if tokenizer_config is None:
         return load_jit_model(jit_filepath, device)
     full_model, ckpts = _load_pytorch_model(jit_filepath, tokenizer_config, device)

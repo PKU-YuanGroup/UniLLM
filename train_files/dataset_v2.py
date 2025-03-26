@@ -107,8 +107,8 @@ class UniDataset(Dataset):
         with open(jsonfile, 'r', encoding='utf-8') as f:
             return json.load(f)
         
-
-    def _convert_normal(self, data_dict, data_folder=None, short_cap=0.2):
+    # data_folder=None,
+    def _convert_normal(self, data_dict,  short_cap=0.2):
  
         conversation = copy.deepcopy(data_dict["conversations"])
 
@@ -204,12 +204,12 @@ class UniDataset(Dataset):
         for b_idx in range(batchsize):
             messages = data[b_idx]
             # assert self.image_gen_rootdir == self.image_under_rootdir 
-            data_folder = self.image_gen_rootdir
+            # data_folder = self.image_gen_rootdir
 
             try:
                 modal, messages = self._convert_normal(
                                         messages,
-                                        data_folder=data_folder, 
+                                        # data_folder=data_folder, 
                                         short_cap=self.short_cap
                                         )
                 # load images and prepare for inputs 

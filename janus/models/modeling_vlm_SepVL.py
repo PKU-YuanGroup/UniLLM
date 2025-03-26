@@ -232,7 +232,11 @@ class MultiModalityCausalLM_SepVL(MultiModalityPreTrainedModel):
             import sys; cur_dir = os.path.dirname(os.path.abspath(__file__)); sys.path.append(os.path.join(cur_dir, '../../'))
             self.gen_vision_model = gen_vision_cls(checkpoint_enc=f'pretrained_ckpts/{model_name}/encoder.jit')
             self.gen_vision_model_decoder = gen_vision_cls(checkpoint_dec=f'pretrained_ckpts/{model_name}/decoder.jit')
-
+        elif gen_vision_config.cls == 'Cosmos_DV8x16x16':
+            model_name = "Cosmos-0.1-Tokenizer-DV8x16x16"
+            import sys; cur_dir = os.path.dirname(os.path.abspath(__file__)); sys.path.append(os.path.join(cur_dir, '../../'))
+            self.gen_vision_model = gen_vision_cls(checkpoint_enc=f'pretrained_ckpts/{model_name}/encoder.jit')
+            self.gen_vision_model_decoder = gen_vision_cls(checkpoint_dec=f'pretrained_ckpts/{model_name}/decoder.jit')
         else:
             self.gen_vision_model = gen_vision_cls()
         # encoder = CausalVideoTokenizer(checkpoint_enc=f'pretrained_ckpts/{model_name}/encoder.jit')
@@ -405,7 +409,52 @@ class MultiModalityCausalLM_SepVL(MultiModalityPreTrainedModel):
         )
 
         return attention_mask
-     
+    
+    def initialize_moe_modules(self, config):
+        hidden_size= self.config.language_config.hidden_size
+        from deepspeed.moe.layer import MoE
+
+        moe_layers = [1,5,9,13,17,21,25,29,33,37,41]
+
+        for i, layer in enumerate(self.language_model.model.layers):
+            if i in moe_layers:
+                pretrained_state_dict_text = layer.mlp_text.state_dict()
+                layer.mlp_text = MoE(
+                    hidden_size,
+                    expert=layer.mlp_text,
+                    num_experts=config.moe_num_experts_text,
+                    ep_size=config.moe_ep_size_text,
+                    k=config.moe_top_k_experts_text,
+                    capacity_factor=1.5,
+                    eval_capacity_factor=2.0,
+                    min_capacity=0,
+                    use_residual=False,
+                    enable_expert_tensor_parallelism=True,
+                )
+                for e in layer.mlp_text.deepspeed_moe.experts.deepspeed_experts:  # check weight
+                    loaded_state_dict = e.state_dict()
+                    assert all([torch.allclose(pretrained_state_dict_text[k], v) for k, v in loaded_state_dict.items()])
+                    assert all([torch.allclose(loaded_state_dict[k], v) for k, v in pretrained_state_dict_text.items()])
+        for i, layer in enumerate(self.language_model.model.layers):
+            if i in moe_layers:
+                pretrained_state_dict_vision = layer.mlp_vision.state_dict()
+                layer.mlp_vision = MoE(
+                    hidden_size,
+                    expert=layer.mlp_vision,
+                    num_experts=config.moe_num_experts_vision,
+                    ep_size=config.moe_ep_size_vision,
+                    k=config.moe_top_k_experts_vision,
+                    capacity_factor=1.5,
+                    eval_capacity_factor=2.0,
+                    min_capacity=0,
+                    use_residual=False,
+                    enable_expert_tensor_parallelism=True,
+                )
+                for e in layer.mlp_vision.deepspeed_moe.experts.deepspeed_experts:  # check weight
+                    loaded_state_dict = e.state_dict()
+                    assert all([torch.allclose(pretrained_state_dict_vision[k], v) for k, v in loaded_state_dict.items()])
+                    assert all([torch.allclose(loaded_state_dict[k], v) for k, v in pretrained_state_dict_vision.items()])
+
     def forward(
         self,
         input_ids: torch.LongTensor = None,
@@ -509,7 +558,7 @@ class MultiModalityCausalLM_SepVL(MultiModalityPreTrainedModel):
 
             # import ipdb; ipdb.set_trace()
             # coscom
-            if self.config.gen_vision_config.cls == 'Cosmos_DV4x8x8':
+            if 'Cosmos' in self.config.gen_vision_config.cls:
                 encoder = self.gen_vision_model
                 if images.dim() == 4:
                     images = images.unsqueeze(2)
@@ -575,7 +624,7 @@ class MultiModalityCausalLM_SepVL(MultiModalityPreTrainedModel):
             pred_scale1_ids = torch.argmax(logits[:, text_token_nums-1:-1], dim=-1)  
             
             # import ipdb; ipdb.set_trace()
-            if self.config.gen_vision_config.cls == 'Cosmos_DV4x8x8':
+            if 'Cosmos' in self.config.gen_vision_config.cls:
                 pred_scale1_ids = pred_scale1_ids.reshape(indices.shape)
                 reconstructed_tensor = self.gen_vision_model_decoder.decode(pred_scale1_ids)
                 reconstructed_tensor = reconstructed_tensor.squeeze(2) 

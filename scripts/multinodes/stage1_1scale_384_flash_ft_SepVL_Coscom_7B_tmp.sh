@@ -6,7 +6,7 @@ ARG_RANK=0
 
 echo $ARG_WORLD_SIZE  $ARG_RANK
 # ARG_NPROC_PER_NODE=${2:-8}
-ARG_NPROC_PER_NODE=1
+ARG_NPROC_PER_NODE=8
 
 ARG_MASTER_ADDR="127.0.0.1"
 # ARG_MASTER_ADDR=$3
@@ -60,7 +60,7 @@ echo $GRADIENT_ACCUMULATION_STEPS
 export WANDB_PROJECT=videollama3_qwen2.5_2b
 RUN_NAME=stage_1
 DATA_DIR=/storage/dataset/filter_aes/final_coyo
-OUTP_DIR=checkpoints/stage1_1scale_384_flash_ft_SepVL_tmp
+OUTP_DIR=checkpoints/stage1_1scale_384_flash_ft_SepVL_Cosmos_tmp0323
  
 cd /storage/zhubin/Janus-MoE/ 
 source /storage/miniconda3/etc/profile.d/conda.sh
@@ -69,6 +69,7 @@ conda activate janus_pro
 
 export CUDA_LAUNCH_BLOCKING=1
 # conda activate janus_pro
+# 
 torchrun --nnodes $WORLD_SIZE \
     --nproc_per_node $NPROC_PER_NODE \
     --master_addr=$MASTER_ADDR \
@@ -77,7 +78,7 @@ torchrun --nnodes $WORLD_SIZE \
     train_files/train_SepVL.py \
     --deepspeed scripts/zero1.json \
     --model_type videollama3_qwen2 \
-    --model_path /storage/jp/Janus/Janus-Pro-1B \
+    --model_path /storage/zhubin/Janus-MoE/pretrained_ckpts/Janus-Pro-7B \
     --data_path ${DATA_DIR}/coyo_part0_aes8639812.json \
     --data_folder ${DATA_DIR} \
     --bf16 True \
@@ -93,6 +94,9 @@ torchrun --nnodes $WORLD_SIZE \
     --save_steps 1000 \
     --save_total_limit 2 \
     --llm_lr 1e-4 \
+    --gen_aligner_lr 1e-3 \
+    --gen_head_lr 1e-3 \
+    --gen_embed_lr 1e-3 \
     --weight_decay 0. \
     --warmup_ratio 0.0 \
     --lr_scheduler_type "cosine" \
@@ -101,17 +105,23 @@ torchrun --nnodes $WORLD_SIZE \
     --dataloader_num_workers 16 \
     --report_to tensorboard \
     --run_name $RUN_NAME \
-    --sample_rate  7,10,3 \
-    --batchsize_list  8,4,2 \
     --samples_per_epoch $[20000*256] \
     --dataset "image_under||image_gen||text_chat" \
+    --sample_rate  0,0,1 \
+    --batchsize_list  8,12,2 \
     --image_under_data_files  /storage/yqs/dataset/BAAI/DenseFusion-1M/DenseFusion-4V-100k/mini_uni_DenseFusion-4V-100k.json \
     --image_under_rootdir /storage/yqs/dataset/BAAI/DenseFusion-1M/images \
-    --image_gen_data_files  /storage/dataset/filter_aes/cap_merge_final_640/recap2/mini_janus_part0_cap6595998.json \
+    --image_gen_data_files  /storage/dataset/filter_aes/cap_merge_final_640/recap2/mini_janus_part0_cap6595998.json    \
     --image_gen_rootdir  /storage/dataset/recap_datacomp_1b_data_20241023_supply/output_undownloaded \
-    --text_chat_data_files /storage/yqs/dataset/BAAI/Infinity-Instruct/mini_uni_Gen.json  \
-    --_attn_implementation_new  "flash_attention_2"   
+    --text_chat_data_files /storage/yqs/dataset/BAAI/Infinity-Instruct/mini_uni_Gen.json   \
+    --_attn_implementation_new  "flash_attention_2"   \
+    --gen_vision_cls    Cosmos_DV8x16x16 \
+    --gen_vision_image_token_size  64000 \
+    --gen_vision_n_embed  6  \
+    --tokenizer_model_max_length   4096 \
+    --use_tokenizer_truncation True 
     
+
     #     : bool = field(default=True)
     # is_causal: bool = field(default=False)
     # : bool = field(default=False)

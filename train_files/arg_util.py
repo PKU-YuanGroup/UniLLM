@@ -20,6 +20,13 @@ class ModelArguments:
     model_path: Optional[str] = field(default="lmsys/vicuna-7b-v1.5")
     version: Optional[str] = field(default="v1", metadata={"help": "Version of the conversation template."})
     freeze_backbone: bool = field(default=False, metadata={"help": "Whether to freeze the LLM backbone."})
+
+    tokenizer_model_max_length : int = field(
+        default=4096,
+    )
+    use_tokenizer_truncation: bool = field(default=False)
+
+
     # Connector Arguments
     # mm_projector_type: Optional[str] = field(default='linear')
     # pretrain_mm_projector: Optional[str] = field(default=None)
@@ -66,6 +73,13 @@ class DataArguments:
 
 @dataclass
 class TrainingArguments(transformers.TrainingArguments):
+    moe: bool = field(default=False)
+    moe_num_experts_text: int = field(default=2)
+    moe_ep_size_text: int = field(default=1)
+    moe_top_k_experts_text: int = field(default=1)
+    moe_num_experts_vision: int = field(default=2)
+    moe_ep_size_vision: int = field(default=1)
+    moe_top_k_experts_vision: int = field(default=1)
 
     report_to : List[str] = field(default=None)
     # ar_with_non_ar: bool = field(default=True)
@@ -97,13 +111,13 @@ class TrainingArguments(transformers.TrainingArguments):
         default=False,
         metadata={"help": "Compress the quantization statistics through double quantization."}
     )
-    tokenizer_model_max_length: int = field(
-        default=2048,
-        metadata={
-            "help":
-            "Maximum tokenizer sequence length. Sequences will be right padded (and possibly truncated)."
-        },
-    )
+    # tokenizer_model_max_length: int = field(
+    #     default=2048,
+    #     metadata={
+    #         "help":
+    #         "Maximum tokenizer sequence length. Sequences will be right padded (and possibly truncated)."
+    #     },
+    # )
 
     group_by_modality_length: bool = field(default=False)
     model_max_length: int = field(
