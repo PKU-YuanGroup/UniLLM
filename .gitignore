@@ -446,7 +446,7 @@ rename.py
 output.png
 test_coscom.py
 pretrained_ckpts
-test_*
+# test_*
 *png
 obs_dianxin_v2.py
 
