@@ -38,6 +38,7 @@ IMAGENET_INCEPTION_MEAN = (0.5, 0.5, 0.5)
 IMAGENET_INCEPTION_STD = (0.5, 0.5, 0.5)
 
 
+
 def expand2square(pil_img, background_color):
     width, height = pil_img.size
     if width == height:

@@ -8,12 +8,12 @@ model_names = [
         # "Cosmos-0.1-Tokenizer-CV4x8x8",
         # "Cosmos-0.1-Tokenizer-CV8x8x8",
         # "Cosmos-0.1-Tokenizer-CV8x16x16",
-        # "Cosmos-0.1-Tokenizer-DI8x8",
+        "Cosmos-0.1-Tokenizer-DI8x8",
         # "Cosmos-0.1-Tokenizer-DI16x16",
         # "Cosmos-0.1-Tokenizer-DV4x8x8",
         # "Cosmos-0.1-Tokenizer-DV8x8x8",
         # "Cosmos-1.0-Tokenizer-CV8x8x8"
-        "Cosmos-0.1-Tokenizer-DV8x16x16",
+        # "Cosmos-0.1-Tokenizer-DV8x16x16",
         # "Cosmos-1.0-Tokenizer-CV8x8x8",
         # "Cosmos-1.0-Tokenizer-DV8x16x16",
 ]

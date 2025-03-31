@@ -48,6 +48,8 @@ from janus.models.projector import MlpProjector
 # ADD 
 import mediapy as media
 from .cosmos_tokenizer.utils import numpy2tensor, tensor2numpy
+from .diffloss import DiffLoss
+
 
 class vision_head(torch.nn.Module):
     def __init__(self, params):
@@ -270,7 +272,20 @@ class MultiModalityCausalLM_SepVL(MultiModalityPreTrainedModel):
         else:
             language_config._attn_implementation =  'flash_attention_2'
         print(f'_attn_implementation is:{language_config._attn_implementation}!')
- 
+
+        # diff params 
+        # --------------------------------------------------------------------------
+        # Diffusion Loss 
+        self.diffloss = DiffLoss(
+            target_channels=self.token_embed_dim,
+            z_channels=decoder_embed_dim,
+            width=diffloss_w,
+            depth=diffloss_d,
+            num_sampling_steps=num_sampling_steps,
+            grad_checkpointing=grad_checkpointing
+        )
+        self.diffusion_batch_mul = config.diffusion_batch_mul
+         
 
     def prepare_inputs_embeds(
         self,
@@ -454,6 +469,15 @@ class MultiModalityCausalLM_SepVL(MultiModalityPreTrainedModel):
                     loaded_state_dict = e.state_dict()
                     assert all([torch.allclose(pretrained_state_dict_vision[k], v) for k, v in loaded_state_dict.items()])
                     assert all([torch.allclose(loaded_state_dict[k], v) for k, v in pretrained_state_dict_vision.items()])
+    
+    # ADD for visual diff loss
+    def forward_diff_loss(self, z, target, mask):
+        bsz, seq_len, _ = target.shape
+        target = target.reshape(bsz * seq_len, -1).repeat(self.diffusion_batch_mul, 1)
+        z = z.reshape(bsz*seq_len, -1).repeat(self.diffusion_batch_mul, 1)
+        mask = mask.reshape(bsz*seq_len).repeat(self.diffusion_batch_mul)
+        loss = self.diffloss(z=z, target=target, mask=mask)
+        return loss
 
     def forward(
         self,
