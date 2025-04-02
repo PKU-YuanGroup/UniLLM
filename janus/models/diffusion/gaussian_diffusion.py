@@ -736,6 +736,9 @@ class GaussianDiffusion:
 
         terms = {}
 
+        # ADD
+        x_t = x_t.to(model_kwargs['c'].dtype)
+        # import ipdb; ipdb.set_trace()
         if self.loss_type == LossType.KL or self.loss_type == LossType.RESCALED_KL:
             terms["loss"] = self._vb_terms_bpd(
                 model=model,

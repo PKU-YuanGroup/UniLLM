@@ -993,6 +993,10 @@ class LlamaForCausalLM(LlamaPreTrainedModel, GenerationMixin):
         vocab_size: Union[int, torch.Tensor] = 0,
         gen_head: Optional[bool] = None,
         image_token_nums : Union[int, torch.Tensor] = 0,
+        diff_loss = None,
+        diffusion_batch_mul: Union[int, torch.Tensor] = 0,
+
+
         **kwargs: Unpack[KwargsForCausalLM],
 
 
@@ -1066,11 +1070,27 @@ class LlamaForCausalLM(LlamaPreTrainedModel, GenerationMixin):
             logits = self.lm_head(hidden_states[:, slice_indices, :])
 
         loss = None
+
         if labels is not None:
             loss = self.loss_function(logits=logits, labels=labels, vocab_size=self.config.vocab_size if not vocab_size else vocab_size, **kwargs)
         
         if len(outputs.all_moe_loss):
             loss += 0.01 * sum(outputs.all_moe_loss)
+
+
+        # import ipdb; ipdb.set_trace()
+        if diff_loss is not None:
+            target = inputs_embeds[:, -image_token_nums:]
+            z = hidden_states[:, -image_token_nums-1:-1]  
+
+            bsz, seq_len, _ = target.shape
+            target = target.reshape(bsz * seq_len, -1).repeat(diffusion_batch_mul, 1)
+            z = z.reshape(bsz*seq_len, -1).repeat(diffusion_batch_mul, 1)
+            # mask = mask.reshape(bsz*seq_len).repeat(diffusion_batch_mul)
+            mask = None
+            loss_diff =  diff_loss(z=z, target=target, mask=mask)
+            # return loss
+            loss += loss_diff
 
         if not return_dict:
             output = (logits,) + outputs[1:]

@@ -142,6 +142,20 @@ class GenVisionConfig(PretrainedConfig):
 
         self.params = AttrDict(kwargs.get("params", {}))
 
+class VisionDiffConfig(PretrainedConfig):
+    model_type = "vision_diff"
+    cls: str = ""
+    params: AttrDict = {}
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        self.cls = kwargs.get("cls", "")
+        if not isinstance(self.cls, str):
+            self.cls = self.cls.__name__
+
+        self.params = AttrDict(kwargs.get("params", {}))
+
 
 class GenAlignerConfig(PretrainedConfig):
     model_type = "gen_aligner"
@@ -181,7 +195,9 @@ class MultiModalityConfig_SepVL(PretrainedConfig):
     gen_vision_config: GenVisionConfig
     gen_aligner_config: GenAlignerConfig
     gen_head_config: GenHeadConfig
-
+    
+    # ADD
+    vision_diff_config: VisionDiffConfig
     language_config: LlamaConfig
 
     def __init__(self, **kwargs):
@@ -200,6 +216,10 @@ class MultiModalityConfig_SepVL(PretrainedConfig):
 
         gen_head_config = kwargs.get("gen_head_config", {})
         self.gen_head_config = GenHeadConfig(**gen_head_config)
+
+        # ADD
+        vision_diff_config = kwargs.get("vision_diff_config", {})
+        self.vision_diff_config = VisionDiffConfig(**vision_diff_config)
 
         language_config = kwargs.get("language_config", {})
         if isinstance(language_config, LlamaConfig):
@@ -256,6 +276,8 @@ class MultiModalityCausalLM_SepVL(MultiModalityPreTrainedModel):
             gen_vision_config.params.image_token_size, gen_vision_config.params.n_embed
         )
 
+        
+
         language_config = config.language_config
         self.language_model = LlamaForCausalLM(language_config)
 
@@ -276,17 +298,22 @@ class MultiModalityCausalLM_SepVL(MultiModalityPreTrainedModel):
         # diff params 
         # --------------------------------------------------------------------------
         # Diffusion Loss 
-        self.diffloss = DiffLoss(
-            target_channels=self.token_embed_dim,
-            z_channels=decoder_embed_dim,
-            width=diffloss_w,
-            depth=diffloss_d,
-            num_sampling_steps=num_sampling_steps,
-            grad_checkpointing=grad_checkpointing
-        )
-        self.diffusion_batch_mul = config.diffusion_batch_mul
-         
+        # import ipdb; ipdb.set_trace()
 
+        # ADD
+        vision_diff_config = config.vision_diff_config # print(config)
+        self.diffloss = DiffLoss(
+            target_channels= vision_diff_config.params.target_channels,
+            z_channels= vision_diff_config.params.z_channels, #decoder_embed_dim,
+            width= vision_diff_config.params.diffloss_w,
+            depth= vision_diff_config.params.diffloss_d,
+            num_sampling_steps= vision_diff_config.params.num_sampling_steps,
+            grad_checkpointing= vision_diff_config.params.grad_checkpointing
+        )
+        # import ipdb; ipdb.set_trace()
+        self.diffloss.net = self.diffloss.net.to(torch.bfloat16)
+        self.diffusion_batch_mul = vision_diff_config.params.diffusion_batch_mul
+        
     def prepare_inputs_embeds(
         self,
         input_ids: torch.LongTensor,
@@ -621,6 +648,15 @@ class MultiModalityCausalLM_SepVL(MultiModalityPreTrainedModel):
             attention_mask = None
     
             # /storage/zhubin/Janus-zb/janus/models/llama/modeling_llama.py
+            
+            use_diff = True
+
+            if not use_diff:
+                self.diffloss = None
+                self.diffusion_batch_mul = None
+
+
+
             output =  self.language_model.forward(
                 input_ids=None,
                 attention_mask=attention_mask, # torch.Size([32, 28])
@@ -640,6 +676,8 @@ class MultiModalityCausalLM_SepVL(MultiModalityPreTrainedModel):
                 vocab_size=self.image_vocab_size,
                 gen_head=self.gen_head,
                 image_token_nums=image_token_nums,
+                diff_loss = self.diffloss,
+                diffusion_batch_mul = self.diffusion_batch_mul,
                 **kwargs,
                 )
 

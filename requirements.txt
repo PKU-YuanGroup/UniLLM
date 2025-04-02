@@ -1,0 +1,22 @@
+# torch==2.0.1
+transformers>=4.38.2
+timm>=0.9.16
+accelerate
+sentencepiece
+attrdict
+einops
+
+# for gradio demo
+ 
+mdtex2html 
+pypinyin 
+ 
+tqdm 
+colorama 
+Pygments 
+markdown 
+SentencePiece 
+
+mediapy
+loguru
+ipdb

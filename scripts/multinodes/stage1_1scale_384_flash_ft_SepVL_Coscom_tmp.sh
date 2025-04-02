@@ -6,7 +6,7 @@ ARG_RANK=0
 
 echo $ARG_WORLD_SIZE  $ARG_RANK
 # ARG_NPROC_PER_NODE=${2:-8}
-ARG_NPROC_PER_NODE=8
+ARG_NPROC_PER_NODE=4
 
 ARG_MASTER_ADDR="127.0.0.1"
 # ARG_MASTER_ADDR=$3
@@ -27,18 +27,18 @@ fi
 
 
 # NCCL setting
-export GLOO_SOCKET_IFNAME=bond0
-export NCCL_SOCKET_IFNAME=bond0
-export NCCL_IB_HCA=mlx5_10:1,mlx5_11:1,mlx5_12:1,mlx5_13:1
-export NCCL_IB_GID_INDEX=3
-export NCCL_IB_TC=162
-export NCCL_IB_TIMEOUT=25
-export NCCL_PXN_DISABLE=0
-export NCCL_IB_QPS_PER_CONNECTION=4
-export NCCL_ALGO=Ring
-export OMP_NUM_THREADS=1
-export MKL_NUM_THREADS=1
-export NCCL_IB_RETRY_CNT=32
+# export GLOO_SOCKET_IFNAME=bond0
+# export NCCL_SOCKET_IFNAME=bond0
+# export NCCL_IB_HCA=mlx5_10:1,mlx5_11:1,mlx5_12:1,mlx5_13:1
+# export NCCL_IB_GID_INDEX=3
+# export NCCL_IB_TC=162
+# export NCCL_IB_TIMEOUT=25
+# export NCCL_PXN_DISABLE=0
+# export NCCL_IB_QPS_PER_CONNECTION=4
+# export NCCL_ALGO=Ring
+# export OMP_NUM_THREADS=1
+# export MKL_NUM_THREADS=1
+# export NCCL_IB_RETRY_CNT=32
 
 
 
@@ -60,11 +60,9 @@ echo $GRADIENT_ACCUMULATION_STEPS
 export WANDB_PROJECT=videollama3_qwen2.5_2b
 RUN_NAME=stage_1
 DATA_DIR=/storage/dataset/filter_aes/final_coyo
-OUTP_DIR=checkpoints/stage1_1scale_384_flash_ft_SepVL_Cosmos_tmp0323_
+OUTP_DIR=checkpoints/stage1_1scale_384_flash_ft_SepVL_Cosmos_tmp0401
  
-cd /storage/zhubin/Janus-MoE/ 
-source /storage/miniconda3/etc/profile.d/conda.sh
-conda activate janus_pro
+cd /mnt/workspace/zhubin/Janus-MoE
  
 
 export CUDA_LAUNCH_BLOCKING=1
@@ -78,9 +76,9 @@ torchrun --nnodes $WORLD_SIZE \
     train_files/train_SepVL.py \
     --deepspeed scripts/zero1.json \
     --model_type videollama3_qwen2 \
-    --model_path /storage/jp/Janus/Janus-Pro-1B \
-    --data_path ${DATA_DIR}/coyo_part0_aes8639812.json \
-    --data_folder ${DATA_DIR} \
+    --model_path /mnt/workspace/checkpoints/deepseek-ai/Janus-Pro-1B  \
+    --data_path None \
+    --data_folder None  \
     --bf16 True \
     --tf32 True \
     --fp16 False \
@@ -107,15 +105,15 @@ torchrun --nnodes $WORLD_SIZE \
     --run_name $RUN_NAME \
     --samples_per_epoch $[20000*256] \
     --dataset "image_under||image_gen||text_chat" \
-    --sample_rate  0,0,1 \
-    --batchsize_list  8,12,4 \
-    --image_under_data_files  /storage/yqs/dataset/BAAI/DenseFusion-1M/DenseFusion-4V-100k/mini_uni_DenseFusion-4V-100k.json \
-    --image_under_rootdir /storage/yqs/dataset/BAAI/DenseFusion-1M/images \
-    --image_gen_data_files  "/storage/dataset/filter_aes/cap_merge_final_640/recap2/mini_janus_part0_cap6595998.json, \
-         /storage/dataset/filter_aes/cap_merge_final_640/recap2/mini_janus_part0_cap6595998.json, \
-      /storage/dataset/filter_aes/cap_merge_final_640/recap2/mini_janus_part0_cap6595998.json" \
-    --image_gen_rootdir  /storage/dataset/recap_datacomp_1b_data_20241023_supply/output_undownloaded \
-    --text_chat_data_files /storage/yqs/dataset/BAAI/Infinity-Instruct/uni_Gen.json   \
+    --sample_rate  0,1,0 \
+    --batchsize_list  8,1,4 \
+    --image_under_data_files /mnt/workspace/zhubin/Janus-MoE/train_files/test_datasets/img_gen.json \
+    --image_under_rootdir /mnt/workspace/zhubin/Janus-MoE/train_files/test_datasets \
+    --image_gen_data_files  "/mnt/workspace/zhubin/Janus-MoE/train_files/test_datasets/img_gen.json, \
+                            /mnt/workspace/zhubin/Janus-MoE/train_files/test_datasets/img_gen.json, \
+                            /mnt/workspace/zhubin/Janus-MoE/train_files/test_datasets/img_gen.json" \
+    --image_gen_rootdir  /mnt/workspace/zhubin/Janus-MoE/train_files/test_datasets \
+    --text_chat_data_files  /mnt/workspace/zhubin/Janus-MoE/train_files/test_datasets/img_gen.json  \
     --_attn_implementation_new  "flash_attention_2"   \
     --gen_vision_cls    Cosmos_DV8x16x16 \
     --gen_vision_image_token_size  64000 \

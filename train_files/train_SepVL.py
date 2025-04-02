@@ -51,15 +51,16 @@ from janus.models import  VLChatProcessor
 from janus.models.modeling_vlm_SepVL  import  MultiModalityCausalLM_SepVL
 from janus.models.modeling_vlm_SepVL import MultiModalityConfig_SepVL
 
+
+from attrdict import AttrDict
 # NOTE: fast tokenizer warning issue: https://github.com/huggingface/transformers/issues/5486
 os.environ["TOKENIZERS_PARALLELISM"] = "true"
-
 local_rank = None
-
 
 def rank0_print(*args):
     if local_rank == 0:
         print(*args)
+
 
 
 def set_seed(seed=42):
@@ -142,6 +143,30 @@ def train():
     # aligner
     setattr(config.gen_aligner_config.params, 'input_dim', model_args.gen_vision_n_embed)
 
+    # import ipdb; ipdb.set_trace()
+    # vision_diff
+    
+    vision_diff_params = {
+        'patch_size': model_args.diff_patch_size,
+        'target_channels': config.language_config.hidden_size * model_args.diff_patch_size**2 ,
+        'z_channels': config.language_config.hidden_size,
+        'diffloss_w': config.language_config.hidden_size,
+        'diffloss_d': model_args.diffloss_d,
+        'num_sampling_steps': model_args.diff_num_sampling_steps,
+        'grad_checkpointing': model_args.diff_grad_checkpointing,
+        'diffusion_batch_mul': model_args.diffusion_batch_mul,
+    }
+    vision_diff_params = AttrDict(vision_diff_params)
+    # vision_diff_params = {
+    #     'target_channels': 2048,
+    #     'z_channels': 2048,
+    #     'diffloss_w': 2048 ,
+    #     'diffloss_d': 3 ,
+    #     'num_sampling_steps': "100",
+    #     'grad_checkpointing': True
+    # }
+    setattr(config.vision_diff_config, 'params', vision_diff_params)
+
 
     # import ipdb; ipdb.set_trace()
     # model: MultiModalityCausalLM_SepVL = AutoModelForCausalLM.from_pretrained(
@@ -189,6 +214,9 @@ def train():
             elif 'gen_vision' in key or 'gen_head' in key or 'gen_embed' in key or 'gen_aligner' in key:
                 # 换个vqvae, 这一部分不要了, 保持cosmos vqvae的原参数
                 pass
+            elif 'diffloss' in key:
+                # diff loss没有预训练权重
+                pass
             else:
                 try:
                     model_dict[key] = pretrained_dict[key] # model_dict[key] == pretrained_dict[key]
@@ -196,13 +224,13 @@ def train():
                     import ipdb; ipdb.set_trace()
                     a=1
                     """
-aa = list(pretrained_dict.keys())
-with open('pretrained_dict.json', 'w', encoding='utf-8') as f:
-    json.dump(aa, f,  indent=2)
+                    aa = list(pretrained_dict.keys())
+                    with open('pretrained_dict.json', 'w', encoding='utf-8') as f:
+                        json.dump(aa, f,  indent=2)
 
-aa = list(pretrained_dict2.keys())
-with open('pretrained_dict2.json', 'w', encoding='utf-8') as f:
-    json.dump(aa, f,  indent=2)
+                    aa = list(pretrained_dict2.keys())
+                    with open('pretrained_dict2.json', 'w', encoding='utf-8') as f:
+                        json.dump(aa, f,  indent=2)
                     """
                 # print(f'33333333333333')
         

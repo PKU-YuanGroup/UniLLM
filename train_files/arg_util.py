@@ -45,6 +45,28 @@ class ModelArguments:
         default= 6 ,
     )
 
+    # diff
+    diff_target_channels: int = field(
+        default= None ,
+    ) 
+    diff_z_channels: int = field(
+        default= None ,
+    ) 
+    diffloss_w: int = field(
+        default= None ,
+    ) 
+    diffloss_d: int = field(
+        default= 3 ,
+    ) 
+    diff_num_sampling_steps: Optional[str] = field(default="100")
+    diff_grad_checkpointing: bool = field(default=False)
+    diff_patch_size: int = field(
+        default= 1,
+    )
+    diffusion_batch_mul: int = field(
+        default= 4,
+    )
+
 @dataclass
 class DataArguments:
     # Path Arguments

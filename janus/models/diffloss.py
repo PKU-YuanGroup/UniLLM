@@ -91,7 +91,8 @@ class TimestepEmbedder(nn.Module):
         return embedding
 
     def forward(self, t):
-        t_freq = self.timestep_embedding(t, self.frequency_embedding_size)
+        # ADD 
+        t_freq = self.timestep_embedding(t, self.frequency_embedding_size).to(self.mlp[0].weight.dtype)
         t_emb = self.mlp(t_freq)
         return t_emb
 
@@ -222,6 +223,7 @@ class SimpleMLPAdaLN(nn.Module):
         :param c: conditioning from AR transformer.
         :return: an [N x C] Tensor of outputs.
         """
+        # import ipdb; ipdb.set_trace()
         x = self.input_proj(x)
         t = self.time_embed(t)
         c = self.cond_embed(c)
